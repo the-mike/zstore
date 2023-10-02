@@ -5,6 +5,11 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    volumes:
+      - "./data/app/config:/var/www/html/config:ro"
+      - "./data/app/upload:/var/www/html/upload"
+      - "./data/app/logs:/var/www/html/logs"
+
     depends_on: 
       - db
 
@@ -12,6 +17,7 @@ services:
     image: postgres:16-alpine
     volumes:
       - "./data/pgdata:/var/lib/postgresql/data"
+      - "./pgsqldb:/scripts:ro"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -20,6 +26,8 @@ services:
     build:
       context: .
       dockerfile: docker/nginx/Dockerfile
+    depends_on:
+      - app
     ports:
       - "80:80"
       - "443:443"
@@ -27,6 +35,7 @@ services:
       - "./data/nginx/config:/etc/nginx/conf.d/sites:ro"
       - "./data/nginx/cert:/etc/nginx/ssl/cert:ro"
       - "./data/nginx/acme:/acme:ro"
+      - "./www:/var/www/html:ro"
 
   acme:
     image: neilpang/acme.sh
