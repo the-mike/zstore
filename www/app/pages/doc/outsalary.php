@@ -30,6 +30,9 @@ class OutSalary extends \App\Pages\Base
     private $_doc;
     public $_list = array();
 
+    /**
+    * @param mixed $docid     редактирование
+    */
     public function __construct($docid = 0) {
         parent::__construct();
 
@@ -155,7 +158,7 @@ class OutSalary extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
 
             return;
         }
@@ -202,7 +205,7 @@ class OutSalary extends \App\Pages\Base
             } else {
 
 
-                $rows = EmpAcc::getBalance();
+                $rows = EmpAcc::getForPay();
                 foreach ($rows as $row) {
                     if($this->_list[$row['emp_id']] instanceof  Employee) {
                         $this->_list[$row['emp_id']]->amount = H::fa($row['am']);
@@ -262,7 +265,7 @@ class OutSalary extends \App\Pages\Base
                 $this->_list[$id]->amount = $this->_list[$id]->advance;
             } else {
 
-                $rows = EmpAcc::getBalance();
+                $rows = EmpAcc::getForPay();
                 foreach ($rows as $row) {
                     if ($id == $row['emp_id']) {
                         $this->_list[$row['emp_id']]->amount = H::fa($row['am']);

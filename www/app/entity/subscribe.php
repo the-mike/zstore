@@ -15,16 +15,20 @@ class Subscribe extends \ZCL\DB\Entity
 {
     //типы  событий
     public const EVENT_DOCSTATE = 1;
+    public const EVENT_NEWCUST  = 2;
     //типы сообщений
     public const MSG_NOTIFY = 1;
     public const MSG_EMAIL  = 2;
     public const MSG_SMS    = 3;
     public const MSG_VIBER  = 4;
-    public const MSG_BOT  = 5;
+    public const MSG_BOT    = 5;
+
     //типы  получателей
     public const RSV_CUSTOMER  = 1;
     public const RSV_DOCAUTHOR = 2;
     public const RSV_USER      = 3;
+    public const RSV_WH        = 4;
+    public const RSV_SYSTEM    = 5;
 
     protected function init() {
         $this->sub_id = 0;
@@ -40,6 +44,7 @@ class Subscribe extends \ZCL\DB\Entity
         $this->statename = (string)($xml->statename[0]);
         $this->doctypename = (string)($xml->doctypename[0]);
         $this->msgsubject = (string)($xml->msgsubject[0]);
+        $this->url = (string)($xml->url[0]);
         $this->username = (string)($xml->username[0]);
         $this->user_id = (int)($xml->user_id[0]);
         $this->state = (int)($xml->state[0]);
@@ -67,6 +72,7 @@ class Subscribe extends \ZCL\DB\Entity
         $this->detail .= "<statename>{$this->statename}</statename>";
         $this->detail .= "<username>{$this->username}</username>";
         $this->detail .= "<msgsubject>{$this->msgsubject}</msgsubject>";
+        $this->detail .= "<url>{$this->url}</url>";
 
         $this->detail .= "</detail>";
 
@@ -76,16 +82,18 @@ class Subscribe extends \ZCL\DB\Entity
     public static function getEventList() {
         $list = array();
         $list[self::EVENT_DOCSTATE] = "Зміна статусу документа";
+        $list[self::EVENT_NEWCUST] = "Новий контрвгент";
 
         return $list;
     }
 
-    public static function getMsgTypeList() {
+    public static function getMsgTypeList($rt=0) {
 
         $sms = \App\System::getOptions('sms')  ;
 
         $list = array();
-        $list[self::MSG_NOTIFY] = "Системне повідомлення";
+        $list[self::MSG_NOTIFY] = "Текст";
+      
         if(\App\System::useEmail()) {
             $list[self::MSG_EMAIL] = "E-mail";
         }
@@ -97,20 +105,38 @@ class Subscribe extends \ZCL\DB\Entity
         if($sms['smstype']==2) {
             $list[self::MSG_VIBER] =  "Viber";
         }
+
         if(strlen(\App\System::getOption("common", 'tbtoken'))>0) {
             $list[self::MSG_BOT] = "Телеграм бот";
-
         }
-
+        
+        if($rt==self::RSV_CUSTOMER) {
+           unset($list[self::MSG_NOTIFY])  ;
+        }
+        
+        if($rt==self::RSV_WH || $rt==self::RSV_SYSTEM) {
+           unset($list[self::MSG_EMAIL])  ;
+           unset($list[self::MSG_VIBER])  ;
+           unset($list[self::MSG_BOT])  ;
+           unset($list[self::MSG_SMS])  ;
+        }
+    
 
         return $list;
     }
 
-    public static function getRecieverList() {
+    public static function getRecieverList($et=0) {
         $list = array();
-        $list[self::RSV_CUSTOMER] = "Контрагент документа";
-        $list[self::RSV_DOCAUTHOR] = "Автор документа";
+        if($et==self::EVENT_DOCSTATE) {
+           $list[self::RSV_DOCAUTHOR] = "Автор документу";
+           $list[self::RSV_CUSTOMER] = "Контрагент документу";
+        }
+        if($et==self::EVENT_NEWCUST) {
+           $list[self::RSV_CUSTOMER] = "Контрагент";
+        }
         $list[self::RSV_USER] = "Користувач системи";
+        $list[self::RSV_WH] = "Web Hook";
+        $list[self::RSV_SYSTEM] = "Системний лог";
 
         return $list;
     }
@@ -128,85 +154,141 @@ class Subscribe extends \ZCL\DB\Entity
                 continue;
             }
 
-            $cnt = $doc->checkStates(array($state));
-            if ($cnt > 1) {
-                // continue;
-            }
-
-            $ret = '';
-            $phone = '';
-            $viber = '';
-            $chat_id = '';
-            //  $viber='';
-            $email = '';
-            $notify = 0;
+            $options=[];
+            $c=null;
+            $u=null;
+            
+            
             if ($sub->reciever_type == self::RSV_CUSTOMER) {
-                $c = \App\Entity\Customer::load($doc->customer_id);
-                if ($c != null && $c->nosubs != 1) {
-                    $phone = $c->phone;
-                    $viber = $c->viber;
-                    $email = $c->email;
-                    $chat_id = $c->chat_id;
+                if($c->nosubs != 1) {
+                   $c = \App\Entity\Customer::load($doc->customer_id);
                 }
             }
             if ($sub->reciever_type == self::RSV_DOCAUTHOR) {
-                $u = \App\Entity\User::load($doc->user_id);
-                if ($u != null) {
-                    $phone = $u->phone;
-                    $viber = $u->viber;
-                    $email = $u->email;
-                    $chat_id = $u->chat_id;
-                    $notify = $doc->user_id;
+                $u = \App\Entity\User::load($doc->headerdata['author']);
+            }
+            if ($sub->reciever_type == self::RSV_USER) {
+                $u = \App\Entity\User::load($sub->user_id);
+            }   
+            
+               
+            if ($c != null  ) {
+                $options['phone'] = $c->phone;
+                $options['viber'] = $c->viber;
+                $options['email'] = $c->email;
+                $options['chat_id'] = $c->chat_id;
+            }
+            
+            if ($u != null) {
+                $options['phone'] = $u->phone;
+                $options['viber'] = $u->viber;
+                $options['email'] = $u->email;
+                $options['chat_id'] = $u->chat_id;
+                $options['notifyuser'] = $doc->user_id;
+            }            
+            $options['doc']  = $doc;
+            
+            $text = $sub->getTextDoc($doc);
+            
+            
+            $text = $sub->sendmsg($text,$options);
+            
+            
+ 
+
+        }
+    }
+
+    //Новый контрагент
+    public static function onNewCustomer($customer_id) {
+        $c = \App\Entity\Customer::load($customer_id);
+ 
+        $list = self::find('disabled <> 1 and sub_type= ' . self::EVENT_NEWCUST);
+        foreach ($list as $sub) {
+            $options=[];
+         
+            $u=null;
+            
+            
+            if ($sub->reciever_type == self::RSV_CUSTOMER) {
+                if($c->nosubs == 1) {
+                   continue;
                 }
             }
             if ($sub->reciever_type == self::RSV_USER) {
                 $u = \App\Entity\User::load($sub->user_id);
-                if ($u != null) {
-                    $phone = $u->phone;
-                    $viber = $u->viber;
-                    $email = $u->email;
-                    $chat_id = $u->chat_id;
-                    $notify = $sub->user_id;
-                }
+            }   
+            
+               
+            if ($c != null  ) {
+                $options['phone'] = $c->phone;
+                $options['viber'] = $c->viber;
+                $options['email'] = $c->email;
+                $options['chat_id'] = $c->chat_id;
             }
-            $text = $sub->getText($doc);
-            if ($notify > 0 && $sub->msg_type == self::MSG_NOTIFY) {
-                self::sendNotify($notify, $text);
+            
+            if ($u != null) {
+                $options['phone'] = $u->phone;
+                $options['viber'] = $u->viber;
+                $options['email'] = $u->email;
+                $options['chat_id'] = $u->chat_id;
+                $options['notifyuser'] = $u->user_id;
+            }            
+//            $options['c']  = $c;
+            
+            $text = $sub->getTextCust($c);
+            
+            
+            $sub->sendmsg($text,$options);
+            
+            
+ 
+
+        }
+    }
+
+    
+    private    function sendmsg($text, $options=[]){
+            if ($options['notifyuser'] > 0 && $this->msg_type == self::MSG_NOTIFY) {
+                self::sendNotify($options['notifyuser'], $text);
             }
-            if ($notify == 0 && $sub->msg_type == self::MSG_NOTIFY) {
+            if (  $this->reciever_type== self::RSV_SYSTEM) {
                 self::sendNotify(\App\Entity\Notify::SYSTEM, $text);
             }
 
-            if (strlen($phone) > 0 && $sub->msg_type == self::MSG_SMS) {
-                $ret =   self::sendSMS($phone, $text);
+            if (strlen($options['phone']) > 0 && $this->msg_type == self::MSG_SMS) {
+                $ret =   self::sendSMS($options['phone'], $text);
             }
-            if (strlen($email) > 0 && $sub->msg_type == self::MSG_EMAIL) {
+            if (strlen($options['email']) > 0 && $this->msg_type == self::MSG_EMAIL) {
 
                 if(System::useCron()) {
                     $task = new  \App\Entity\CronTask();
                     $task->tasktype=\App\Entity\CronTask::TYPE_SUBSEMAIL;
                     $task->taskdata= serialize(array(
-                       'email'=>$email ,
-                       'subject'=>$sub->msgsubject ,
+                       'email'=>$options['email'] ,
+                       'subject'=>$this->msgsubject ,
                        'text'=>$text ,
-                       'document_id'=> $sub->attach==1 ? $doc->document_id : 0
+                       'document_id'=> $this->attach==1 ?  $options['doc']->document_id : 0
                     ));
 
                     $task->save();
                 } else {
-                    $ret =   self::sendEmail($email, $text, $sub->msgsubject, $sub->attach==1 ? $doc : null);
+                    $ret =   self::sendEmail($options['email'], $text, $this->msgsubject, $this->attach==1 ? $options['doc'] : null);
                 }
 
             }
 
-            if(strlen($viber)==0) {
-                $viber = $phone;
+            if(strlen($options['viber'])==0) {
+                $options['viber'] = $options['phone'];
             }
-            if(strlen($viber)>0 && $sub->msg_type == self::MSG_VIBER) {
-                $ret =   self::sendViber($viber, $text) ;
+            if(strlen($options['viber'])>0 && $this->msg_type == self::MSG_VIBER) {
+                $ret =   self::sendViber($options['viber'], $text) ;
             }
-            if(strlen($chat_id)>0 && $sub->msg_type == self::MSG_BOT) {
-                $ret =   self::sendBot($chat_id, $text, $sub->attach==1 ? $doc : null,$sub->html==1) ;
+            if(strlen($options['chat_id'])>0 && $this->msg_type == self::MSG_BOT) {
+                $ret =   self::sendBot($options['chat_id'], $text, $this->attach==1 ? $options['doc'] : null,$this->html==1) ;
+            }
+            if($sub->reciever_type == self::RSV_WH) {
+                $ret =   self::sendHook($this->url, $text) ;
             }
 
             if(strlen($ret)>0) {
@@ -217,24 +299,50 @@ class Subscribe extends \ZCL\DB\Entity
                 $n->message = $ret;
 
                 $n->save();
-            }
+                
+            }         
+    }    
+    
+    /**
+     * возвращает текст  с  учетом разметки
+     *
+     * @param mixed $c
+     */
+    private function getTextCust($c) {
+        $this->msgtext = str_replace('{', '{{', $this->msgtext);
+        $this->msgtext = str_replace('}', '}}', $this->msgtext);
+        $common = \App\System::getOptions("common");
 
-        }
+        $header = array();
+        $header['customer_id'] = $c->customer_id;
+        $header['customer_name'] = $c->customer_name;
+       
+       
+        try {
+            $m = new \Mustache_Engine();
+            $text = $m->render($this->msgtext, $header);
+
+            return $text;
+        } catch(\Exception $e) {
+            return "Помилка розмітки";
+        }        
     }
-
     /**
      * возвращает текст  с  учетом разметки
      *
      * @param mixed $doc
      */
-    public function getText($doc) {
+    private function getTextDoc($doc) {
         //в  разметке  одинарные
         $this->msgtext = str_replace('{', '{{', $this->msgtext);
         $this->msgtext = str_replace('}', '}}', $this->msgtext);
+        $common = \App\System::getOptions("common");
 
         $header = array();
 
 
+        $header['document_id'] = $doc->document_id;
+        $header['customer_id'] = $doc->customer_id;
         $header['document_number'] = $doc->document_number;
         $header['doc_dn'] = intval(preg_replace('/[^0-9]/', '', $doc->document_number));
         $header['document_date'] = \App\Helper::fd($doc->document_date);
@@ -251,8 +359,9 @@ class Subscribe extends \ZCL\DB\Entity
         $header['payed'] = '';
         $header['credit'] = '';
         $header['payurl'] = '';
-        $header['device'] = $doc->headerdata['device'];
-        $header['ttnnp'] = $doc->headerdata['ship_number'];
+        $header['botname'] = $common['tbname'] ??'';
+        $header['device'] = $doc->headerdata['device'] ??'';
+        $header['ttnnp'] = $doc->headerdata['ship_number'] ??'';
         if (strlen($doc->headerdata['device']) > 0 && strlen($doc->headerdata['devsn']) > 0) {
             $header['device'] .= " (" . $doc->headerdata['devsn'] . ")";
         }
@@ -376,7 +485,7 @@ class Subscribe extends \ZCL\DB\Entity
 
             return $text;
         } catch(\Exception $e) {
-            return "Ошибка  разметки";
+            return "Помилка розмітки";
         }
     }
 
@@ -657,4 +766,39 @@ class Subscribe extends \ZCL\DB\Entity
         }
     }
 
+    
+    public static function sendHook($url, $text) {
+
+        try {
+            
+   
+                $curl = curl_init($url);
+                curl_setopt($curl, CURLOPT_POST, true);
+                curl_setopt($curl, CURLOPT_POSTFIELDS, $text);
+                curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+     //           $output = curl_exec($curl);
+                if (curl_errno($curl) > 0) {
+
+                    return 'Curl error: ' . curl_error($curl);
+                }
+                $status_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+                if ($status_code >= 300 ) {
+                    return 'http code: ' . $status_code;
+                }
+                if ($status_code == 0 ) {
+                    return 'http code:0 ' ;
+                }
+                 
+                
+                curl_close($curl);
+                return '';
+
+        } catch(\Exception $e) {
+
+            return $e->getMessage();
+        }
+    }
+    
 }

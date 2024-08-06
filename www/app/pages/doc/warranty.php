@@ -27,6 +27,10 @@ class Warranty extends \App\Pages\Base
     private $_basedocid = 0;
     private $_rowid     = 0;
 
+     /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
@@ -75,6 +79,14 @@ class Warranty extends \App\Pages\Base
                     $this->docform->customer->setText($basedoc->headerdata['customer_name']);
 
                     if ($basedoc->meta_name == 'GoodsIssue') {
+                        $this->_doc->customer_id= $basedoc->customer_id;
+                        $this->_doc->firm_id= $basedoc->firm_id;
+                        $this->_itemlist = $basedoc->unpackDetails('detaildata');
+
+                        
+                    }
+
+                    if ($basedoc->meta_name == 'POSCheck') {
                         $this->_doc->customer_id= $basedoc->customer_id;
                         $this->_doc->firm_id= $basedoc->firm_id;
                         $this->_itemlist = $basedoc->unpackDetails('detaildata');
@@ -258,7 +270,7 @@ class Warranty extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }

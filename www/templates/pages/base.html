@@ -3,6 +3,7 @@
         <meta charset="utf-8">
         <meta lang="ua" >
         <title>Zippy-склад</title>
+        <meta name="robots" content="noindex">     
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -28,13 +29,12 @@
         <script src="/assets/js/adminlte.js" type="text/javascript"></script>
         <script src="/assets/js/vue/vue.min.js"></script>     
         <script src="/assets/js/vue/httpvueloader.js"></script>     
-        <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-         
+ 
         <script src="/assets/js/app.js" type="text/javascript"></script>
        
-        <!-- Google Font -->
-        <link rel="stylesheet"
-              href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,300italic,400italic,600italic">
+        <!-- Google Font 
+        <link rel="stylesheet"               href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,300italic,400italic,600italic">
+        -->
 
      <script>
    function beep(){
@@ -62,7 +62,7 @@
     return ret
   }
   
-  
+  //сокращенный  вызов callPageMethod
   function  callPM(method,params,postdata,callback =null   , callerror=null     )
   {
       try{
@@ -73,8 +73,17 @@
           
           callPageMethod(method,params,postdata,(data)=> 
           {
-               var data = JSON.parse(data)
-               callback(data)
+//               console.log(data) 
+               
+               try{
+                  var data = JSON.parse(data)
+                  callback(data)                  
+               }
+               catch(error) {
+                   console.log(error)           
+                   console.log(data)           
+               }           
+               
             
           } , (error)=> 
           {
@@ -91,7 +100,7 @@
       }
   }     
      
-     
+        //проверка  ответа  на  ошибки
         function checkPMAnswer(ret){
             
             if(ret.error)  {
@@ -122,7 +131,7 @@
           return  _v        
       }
     
-     
+     //округление  цен
      function fa(v){
           var d = {{amdigits}}     
           var _v =  parseVal(v)
@@ -132,6 +141,7 @@
           return   _v.toFixed(0)          
           
      }
+     //округление  количеств
      function fqty(v){
           var d = {{qtydigits}}
           var _v =  parseVal(v)
@@ -248,7 +258,7 @@
                     </li>
                     <li class="nav-item dropdown  ">
                         <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown"><i class="fa fa-user"></i> <span
-                                zippy="username"></span> </a>
+                                zippy="loginname"></span> </a>
                         <ul class="dropdown-menu">
                             <li>
                                 <a class="dropdown-item  " href="/index.php?p=App/Pages/Jobs"><i
@@ -764,6 +774,12 @@
                                                     <p>&nbsp;&nbsp;Журнал z-звiтiв</p>
                                                 </a>
                                             </li>
+                                            <li class="nav-item">
+                                                <a href="/index.php?p=App/Modules/PPO/DocList" class="nav-link">
+                                                    <i class="fa    nav-icon"></i>
+                                                    <p>&nbsp;&nbsp;Список чекiв</p>
+                                                </a>
+                                            </li>
                                                                                            
                                             <li class="nav-item">
                                                 <a href="/index.php?p=App/Modules/PPO/ZForm" class="nav-link">
@@ -830,6 +846,38 @@
 
                                     </li>
                                     {{/paperless}}
+                                    
+                                  {{#vdoc}}
+                                    <li class="nav-item">
+                                        <a href="#" class="nav-link">
+                                            <i class="fa    nav-icon"></i>
+                                            <p>Вчасно Документооборот
+                                                <i class="right fas fa-angle-left"></i>
+                                            </p>
+
+                                        </a>
+                                        <ul class="nav nav-treeview">
+                                            <li class="nav-item">
+                                                <a href="/index.php?p=App/Modules/VDoc/DocList" class="nav-link">
+                                                    <i class="fa    nav-icon"></i>
+                                                    <p>&nbsp;&nbsp;Документи</p>
+                                                </a>
+                                            </li>   
+                                              {{#hideblock}}
+                                            <li class="nav-item">
+                                                <a href="/index.php?p=App/Modules/VDoc/Options" class="nav-link">
+                                                    <i class="fa    nav-icon"></i>
+                                                    <p>&nbsp;&nbsp;Налаштування</p>
+                                                </a>
+                                            </li>    
+                                              {{/hideblock}}
+
+                                        </ul>
+
+                                    </li>
+                                    {{/vdoc}}                                    
+                                    
+                                    
                                   {{#promua}}
                                     <li class="nav-item">
                                         <a href="#" class="nav-link">
@@ -864,6 +912,41 @@
 
                                     </li>
                                     {{/promua}}
+                                  {{#horoshop}}
+                                    <li class="nav-item">
+                                        <a href="#" class="nav-link">
+                                            <i class="fa    nav-icon"></i>
+                                            <p>Обмін з Хорошоп
+                                                <i class="right fas fa-angle-left"></i>
+                                            </p>
+
+                                        </a>
+                                        <ul class="nav nav-treeview">
+                                              {{#isadmins}}
+                                            <li class="nav-item">
+                                                <a href="/index.php?p=App/Modules/HR/Options" class="nav-link">
+                                                    <i class="fa    nav-icon"></i>
+                                                    <p>&nbsp;&nbsp;Налаштування</p>
+                                                </a>
+                                            </li>
+                                              {{/isadmins}}
+                                            <li>
+                                                <a href="/index.php?p=App/Modules/HR/Orders" class="nav-link">
+                                                    <i class="fa    nav-icon"></i>
+                                                    <p>&nbsp;&nbsp;Замовлення</p>
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a href="/index.php?p=App/Modules/HR/Items" class="nav-link">
+                                                    <i class="fa    nav-icon"></i>
+                                                    <p>&nbsp;&nbsp;Товари</p>
+                                                </a>
+                                            </li>
+                                        </ul>
+
+                                    </li>
+                                    {{/horoshop}}                                    
+                                    
                                 </ul>
 
                             </li>
@@ -964,12 +1047,20 @@
                                             <p>&nbsp;&nbsp;Системний лог</p>
                                         </a>
                                     </li>
+                                  {{#isadmin}}                                    
+                                   <li class="nav-item">
+                                        <a href="/index.php?p=App/Pages/Update" class="nav-link">
+                                            <i class="fa    nav-icon"></i>
+                                            <p>&nbsp;&nbsp;Оновлення</p>
+                                        </a>
+                                    </li>
+                                     {{/isadmin}} 
                                 </ul>
 
                             </li>
                          
                             <li class="nav-item  ">
-                                <a href="https://zippy.com.ua/contacts" class="nav-link">
+                                <a target="_blank" href="https://zippy.com.ua/contacts" class="nav-link">
                                     <i class="nav-icon fas fa-phone-alt"></i>
                                     <p>
                                         Тех. пiдтримка 
@@ -980,7 +1071,7 @@
                       
                             {{/isadmins}}
                           <li class="nav-item  ">
-                                <a href="https://zippy.com.ua/zstoreusage" class="nav-link">
+                                <a target="_blank" href="https://zippy.com.ua/zstoreusage" class="nav-link">
                                     <i class="nav-icon fa fa-info-circle"></i>
                                     <p>
                                         Документація  
@@ -1015,13 +1106,16 @@
                             {{#smart}}
 
                             <div style="justify-content: space-between" class="    card   d-none d-sm-block">
-                                {{{smart}}}
+                                {{{smart}}} 
+                                
+                                 {{#isadmins}}
+                                 <small><a href="/index.php?p=App/Pages/Roles" title="Налаштування оперативного меню"><i class="fa fa-cog"></i> </a> </small>
+                                 {{/isadmins}}
+                                 
                             </div>
                              
                             {{/smart}}
-                             {{#showtips}}
-                                <small> <i class="fa fa-info-circle"> Оперативне меню налаштовується в  довіднику ролей</small>
-                             {{/showtips}}
+                            
 
 
                             <childpage/>
@@ -1088,37 +1182,39 @@
                 </div>
             </div>
             
-        <div id="modalwait" class="modal fade   "    tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-sm modal-dialog-centered ">
-                    <div class="modal-content  ">
-                 
-                        <table class="w-100"> 
-                        <tr>
-                        <td style="height:100px;" align="center" valign="middle">
-                            
-                            <div class="spinner-border" role="status">
+
+    <dialog id="dialogwait">
+                     
+           <div class="spinner-border" role="status">
                               <span class="sr-only">Загрузка...</span>
                             </div>
-                        </td>
-                        </tr>
-                       </table>
-                    </div>
-                </div>
-            </div>            
-            
+                
+
+    </dialog>            
+    
+    
          <script>
         {{#showtoasts}}
  
          callPM('gettoasts',[],null,function(data){
           
              for(var t of data) {
-              
-                $(document).Toasts('create', {
-                icon: 'fa fa-exclamation-triangle text-warning',
-                        position:'bottomRight',
-                        title:t.title
+                if(t.type=="w")  {
+                    $(document).Toasts('create', {
+                    icon: 'fa fa-exclamation-triangle text-warning',
+                            position:'bottomRight',
+                            title:t.title
 
-                })           
+                    })           
+                }
+                if(t.type=="i")  {
+                    $(document).Toasts('create', {
+                    icon: 'fa fa-info-circle text-info',
+                            position:'bottomRight',
+                            title:t.title
+
+                    })           
+                }
                  
              }
              
@@ -1189,7 +1285,7 @@
             }
             
              function  _getValue(id){
-                  var v = parseFloat($('#'+id).val()); 
+                  var v = Number.parseFloat($('#'+id).val()); 
                 
                   if(Number.isNaN(v)==false) {
                       return v;  
@@ -1245,13 +1341,13 @@
                    
        function check_execdoc(ele){
             
-            $("#modalwait").modal("show") ;
+           document.getElementById('dialogwait').showModal()
             return true;
        
         }
         function check_savedoc(ele){
-            
-            $("#modalwait").modal("show") ;
+            document.getElementById('dialogwait').showModal()
+          
             return true;
        
         } 
@@ -1321,7 +1417,7 @@
        
         } 
         
-        
+        //инфо о  контрагенте
         function customerInfo(id){
                 callPageMethod('getCustomerInfo',[id],null,(data)=> 
                 {
@@ -1330,6 +1426,20 @@
                     $('#mcinfo').html(data)  
                  
                   
+         
+                } )          
+        }
+        
+       //ТМЦ в закупку
+       function addItemToCO(id){
+                callPageMethod('addItemToCO',[id],null,(data)=> 
+                {
+                    
+                      if(data=="") {
+                         toastr.info('Додано' )              
+                      } else {
+                           toastr.error(data)   
+                      }         
          
                 } )          
         }
@@ -1351,22 +1461,12 @@
            
         }
  
- //закрывание формы со  спинером
- $('#modalwait').on('shown.bs.modal', function (event) {
-
-    setTimeout(
-      function() 
-      {
-         $("#modalwait").modal("hide") ;
-      }, 500);     
-   
-     
- })
+ 
  
  {{#cron}}
  
-    fetch('/crontab.php')  
-    setTimeout(() => fetch('/crontab.php')  , 30*60*1000);         
+  
+    setTimeout(() => fetch('/crontab.php')  , 5*1000);         
  
  {{/cron}} 
  

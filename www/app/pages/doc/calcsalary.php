@@ -22,6 +22,9 @@ class CalcSalary extends \App\Pages\Base
     private $_list;
 
 
+    /**
+    * @param mixed $docid     редактирование
+    */
     public function __construct($docid = 0) {
         parent::__construct();
 
@@ -59,9 +62,27 @@ class CalcSalary extends \App\Pages\Base
 
             if (($opt['codeadvance'] ??0) > 0) { //аванс
 
-                $rows = EmpAcc::getAmountByType($this->_doc->headerdata['year'], $this->_doc->headerdata['month'], EmpAcc::ADVANCE);
+                $rows = EmpAcc::getAmountByType(EmpAcc::ADVANCE,  $this->_doc->headerdata['year'], $this->_doc->headerdata['month'] );
                 foreach ($rows as $row) {
                     $c = '_c' . $opt['codeadvance'];
+                    $this->_list[$row['emp_id']]->{$c} = 0 - H::fa($row['am']);
+                }
+            }
+
+            if (($opt['codebonus'] ??0) > 0) { 
+
+                $rows = EmpAcc::getAmountByType(EmpAcc::BONUS );
+                foreach ($rows as $row) {
+                    $c = '_c' . $opt['codebonus'];
+                    $this->_list[$row['emp_id']]->{$c} =  H::fa($row['am']);
+                }
+            }
+
+            if (($opt['codefine'] ??0) > 0) { 
+
+                $rows = EmpAcc::getAmountByType(EmpAcc::FINE );
+                foreach ($rows as $row) {
+                    $c = '_c' . $opt['codefine'];
                     $this->_list[$row['emp_id']]->{$c} = 0 - H::fa($row['am']);
                 }
             }
@@ -189,7 +210,7 @@ class CalcSalary extends \App\Pages\Base
             if ($isEdited == false) {
                 $this->_doc->document_id = 0;
             }
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
 
             return json_encode(['error'=>$ee->getMessage()], JSON_UNESCAPED_UNICODE);
 
@@ -256,6 +277,9 @@ class CalcSalary extends \App\Pages\Base
 
 
         foreach ($this->_list as $emp) {
+            if(intval($emp->employee_id)==0) {
+                continue;
+            }
             $e = array('emp_name'=>$emp->emp_name,'id'=>$emp->employee_id);
             $e['sellvalue'] = 0;
             $u = \App\Entity\User::getByLogin($emp->login) ;
@@ -268,9 +292,7 @@ class CalcSalary extends \App\Pages\Base
 
 
             $sql="select sum(tm) as tm, count(distinct dd) as dd   from (select  date(t_start) as dd, (UNIX_TIMESTAMP(t_end)-UNIX_TIMESTAMP(t_start)  - t_break*60)   as  tm from timesheet where t_type=1  and  emp_id = {$emp->employee_id} and  date(t_start)>=date({$from}) and  date( t_start)<= date( {$to} ) ) t   ";
-            if($conn->dataProvider=="postgres") {
-                $sql="select sum(tm) as tm, count(distinct dd) as dd   from (select  date(t_start) as dd, (extract(epoch from t_end) - extract(epoch from t_start)  - t_break*60)   as  tm from timesheet where t_type=1  and  emp_id = {$emp->employee_id} and  date(t_start)>=date({$from}) and  date( t_start)<= date( {$to} ) ) t   ";
-            }
+          
 
             $t = $conn->GetRow($sql);
             $e['hours']  = intval($t['tm']/3600);

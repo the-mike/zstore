@@ -26,6 +26,7 @@ class UserLogin extends \Zippy\Html\WebPage
         $form->add(new TextInput('userlogin'));
         $form->add(new TextInput('userpassword'));
         $form->add(new TextInput('capchacode'));
+        $form->add(new TextInput('newver'));
         $form->add(new \Zippy\Html\Form\CheckBox('remember'));
         $form->add(new \ZCL\Captcha\Captcha('capcha'));
         $form->onSubmit($this, 'onsubmit');
@@ -41,7 +42,10 @@ class UserLogin extends \Zippy\Html\WebPage
         $this->_tvars['capcha'] = $common['capcha'] == 1;
 
         $this->_tvars['cron']  =  \App\System::useCron() ;
-
+        $this->_tvars['curver']  =  \App\System::CURR_VERSION ;
+       $nocache= "?t=" . time()."&s=". \App\Helper::getSalt() .'&phpv='. phpversion(). '_'. \App\System::CURR_VERSION ;
+       
+       $this->_tvars['verurl']  ="https://zippy.com.ua/checkver.php".$nocache;
 
     }
 
@@ -85,13 +89,19 @@ class UserLogin extends \Zippy\Html\WebPage
                 $_SESSION['userlogin'] = $user->userlogin; //для  использования  вне  Application
                 //App::$app->getResponse()->toBack();
                 if ($this->loginform->remember->isChecked()) {
-                    setcookie("remember", $user->user_id . '_' . md5($user->user_id . Helper::getSalt()), time() + 60 * 60 * 24 * 30);
+                    setcookie("remember", $user->user_id . '_' . md5($user->user_id . Helper::getSalt()), time() + 60 * 60 * 24 * 14);
                 } else {
                     setcookie("remember", '', 0);
                 }
-                if ($_COOKIE['branch_id'] > 0) {
+                if (($_COOKIE['branch_id'] ?? 0) > 0) {
                     System::getSession()->defbranch = $_COOKIE['branch_id'];
                 }
+                
+                if($user->rolename=='admins' && $sender->newver->getText()=="isnew"){
+                    App::Redirect('\App\Pages\Update');
+                    return;   
+                }
+                
                 $modules = \App\System::getOptions("modules");
 
                 if ($modules['shop'] == 1) {

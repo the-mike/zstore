@@ -8,7 +8,7 @@ use App\Modules\Shop\Helper;
 use ZCL\DB\EntityDataSource;
 use Zippy\Html\DataList\ArrayDataSource;
 use Zippy\Html\DataList\DataView;
-use Zippy\Html\DataList\Paginator;
+ 
 use Zippy\Html\Form\DropDownChoice;
 use Zippy\Html\Form\Form;
 use Zippy\Html\Form\TextInput;
@@ -54,8 +54,8 @@ class Catalog extends Base
         $this->sortform->add(new DropDownChoice('sortorder', 5))->onChange($this, 'onSort');
 
         $this->add(new DataView('productlist', new ArrayDataSource($this, '_list'), $this, 'plistOnRow'));
-        $this->add(new \Zippy\Html\DataList\Paginator('pag', $this->productlist));
-        $this->productlist->setPageSize(25);
+        $this->add(new \Zippy\Html\DataList\Pager('pag', $this->productlist));
+        $this->productlist->setPageSize(24);
         if($options['pagesize'] >0) {
             $this->productlist->setPageSize($options['pagesize']);
         }
@@ -83,6 +83,7 @@ class Catalog extends Base
         }
 
         $this->_tvars['fcolor'] = "class=\"btn btn-success\"";
+
     }
 
     private function UpdateList() {
@@ -222,6 +223,9 @@ class Catalog extends Base
         $price = $item->getPurePrice($options['defpricetype']);
         $price = \App\Helper::fa($price);
         $row->add(new Label("sprice", $price . ' ' . $options['currencyname']));
+    
+        
+        $row->add(new Label("scustomsize", $item->customsize  ));
         $row->add(new Label("sactionprice", \App\Helper::fa($item->getActionPrice()). ' ' . $options['currencyname']))->setVisible(false);
         $row->add(new Label('saction'))->setVisible(false);
 

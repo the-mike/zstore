@@ -6,6 +6,7 @@ use App\Application as App;
 use App\Entity\Doc\Document;
 use App\Helper as H;
 use App\Entity\Firm;
+use App\Entity\Customer;
 use App\System;
 use Zippy\Html\DataList\DataView;
 use Zippy\Html\DataList\Paginator;
@@ -14,6 +15,7 @@ use Zippy\Html\Form\DropDownChoice;
 use Zippy\Html\Form\Form;
 use Zippy\Html\Form\SubmitButton;
 use Zippy\Html\Form\TextInput;
+use Zippy\Html\Form\AutocompleteTextInput;
 use Zippy\Html\Label;
 use Zippy\Html\Link\ClickLink;
 use Zippy\Html\Panel;
@@ -43,6 +45,7 @@ class GRList extends \App\Pages\Base
         $this->filter->add(new DropDownChoice('status', array(0 => 'Відкриті', 1 => 'Не проведені', 2 => 'Не сплачені', 3 => 'Всі'), 0));
         $this->filter->add(new DropDownChoice('searchcomp', Firm::findArray('firm_name', 'disabled<>1', 'firm_name'), 0));
         $this->filter->add(new DropDownChoice('fstore', \App\Entity\Store::getList(), 0));
+        $this->filter->add(new AutocompleteTextInput('searchcust'))->onText($this, 'OnAutoCustomer');
 
         $doclist = $this->add(new DataView('doclist', new GoodsReceiptDataSource($this), $this, 'doclistOnRow'));
 
@@ -55,6 +58,7 @@ class GRList extends \App\Pages\Base
 
         $this->statuspan->statusform->add(new SubmitButton('bttn'))->onClick($this, 'statusOnSubmit');
         $this->statuspan->statusform->add(new SubmitButton('bret'))->onClick($this, 'statusOnSubmit');
+
 
         $this->statuspan->add(new \App\Widgets\DocView('docview'));
 
@@ -135,6 +139,7 @@ class GRList extends \App\Pages\Base
             App::Redirect("\\App\\Pages\\Doc\\RetCustIssue", 0, $this->_doc->document_id);
             return;
         }
+             
         $this->doclist->Reload(false);
 
         $this->statuspan->setVisible(false);
@@ -147,6 +152,7 @@ class GRList extends \App\Pages\Base
 
         $this->statuspan->statusform->bttn->setVisible($this->_doc->meta_name == 'InvoiceCust');
         $this->statuspan->statusform->bret->setVisible($this->_doc->meta_name == 'GoodsReceipt');
+
 
         //новый
         if ($this->_doc->state < Document::STATE_EXECUTED) {
@@ -203,6 +209,10 @@ class GRList extends \App\Pages\Base
         H::exportExcel($data, $header, 'baylist.xlsx');
     }
 
+    public function OnAutoCustomer($sender) {
+        return Customer::getList($sender->getText(), 2, true);
+    }
+    
 }
 
 /**
@@ -221,7 +231,7 @@ class GoodsReceiptDataSource implements \Zippy\Interfaces\DataSource
 
         $conn = \ZDB\DB::getConnect();
 
-        $where = "   meta_name  in('GoodsReceipt','InvoiceCust',  'RetCustIssue' )  ";
+        $where = "   meta_name  in('GoodsReceipt','InvoiceCust',  'RetCustIssue','PayComitent' )  ";
 
         $status = $this->page->filter->status->getValue();
 
@@ -242,6 +252,10 @@ class GoodsReceiptDataSource implements \Zippy\Interfaces\DataSource
         $comp = $this->page->filter->searchcomp->getValue();
         if ($comp > 0) {
             $where = $where . " and firm_id = " . $comp;
+        }
+        $cust = $this->page->filter->searchcust->getKey();
+        if ($cust > 0) {
+            $where = $where . " and customer_id = " . $cust;
         }
 
         $store_id = $this->page->filter->fstore->getValue();

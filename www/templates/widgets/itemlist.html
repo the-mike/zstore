@@ -118,13 +118,7 @@
                         
                 
                 
-            }
-           
-             
-        ,
-            
-         
-         
+            } ,
                  
         } ,
        
@@ -148,7 +142,7 @@
         mounted: function(){
               var data= {
                   cats:true,
-                  brands:true,
+                  brands:true 
               }
  
               callPageMethod('vLoadLists',[ ], JSON.stringify(data),(data)=> 
@@ -156,7 +150,7 @@
                    var data = JSON.parse(data)
                    
                    this.cats = data.cats
-                   this.brands = data.cats
+                   this.brands = data.brands
                 
               });               
                          
@@ -170,7 +164,7 @@
         
       //открыть  виджет  
       function onOpenItemList(_f){
-        _cb = _f    // каддбек  при выборе  итема
+        _cb = _f    // колбек  при выборе  итема
           
         $("#modalitemlist").modal('show')
         

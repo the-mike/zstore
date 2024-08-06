@@ -64,23 +64,17 @@ if(!file_exists(_ROOT . "upload")) {
 }
 
 
-//  phpQuery::$debug = true;
+ 
 //Параметры   соединения  с  БД
-if(($_config['db']['driver'] ?? '') =='postgres') {
+\ZDB\DB::config($_config['db']['host'], $_config['db']['name'], $_config['db']['user'], $_config['db']['pass']);
 
-    \ZDB\DB::config($_config['db']['host'], $_config['db']['name'], $_config['db']['user'], $_config['db']['pass'], "postgres");
-    $ADODB_QUOTE_FIELDNAMES = false;
-
-} else {
-    \ZDB\DB::config($_config['db']['host'], $_config['db']['name'], $_config['db']['user'], $_config['db']['pass']);
-}
 
 
 //проверяем соединение
 try {
     $conn = \ZDB\DB::getConnect();
 } catch (Throwable $e) {
-    echo 'Ошибка  соединения с  БД. Подробности  в логе.';
+    echo 'Ошибка  соединения с  БД. Подробности  в папке logs';
 
     $logger->error($e);
     die;

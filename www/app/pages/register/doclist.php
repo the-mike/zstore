@@ -49,16 +49,15 @@ class DocList extends \App\Pages\Base
 
         $filter = Filter::getFilter("doclist");
         if ($filter->isEmpty()) {
-            $filter->to = time();
-            //     $d = new \App\DateTime() ;
-            //            $d = $d->startOfMonth()->subMonth(1) ;
-            //            $filter->from = $d->getTimestamp();
-            $filter->from = time() - (7 * 24 * 3600);
+            $filter->to =   0;
+            $filter->from = time() - (15 * 24 * 3600);
             $filter->page = 1;
             $filter->doctype = 0;
             $filter->customer = 0;
             $filter->author = 0;
             $filter->status = 0;
+            $filter->store = 0;
+            $filter->mfund = 0;
             $filter->customer_name = '';
 
             $filter->searchnumber = '';
@@ -70,6 +69,8 @@ class DocList extends \App\Pages\Base
         $this->filter->add(new DropDownChoice('doctype', H::getDocTypes(), $filter->doctype));
         $this->filter->add(new DropDownChoice('author', \App\Entity\User::findArray('username', 'disabled<>1', 'username'), $filter->author));
         $this->filter->add(new DropDownChoice('status', Document::getStateList(), $filter->status));
+        $this->filter->add(new DropDownChoice('store', \App\Entity\Store::getList() , $filter->store));
+        $this->filter->add(new DropDownChoice('mfund', \App\Entity\MoneyFund::getList(), $filter->mfund));
 
         $this->filter->add(new ClickLink('erase', $this, "onErase"));
         $this->filter->add(new AutocompleteTextInput('searchcust'))->onText($this, 'OnAutoCustomer');
@@ -85,7 +86,7 @@ class DocList extends \App\Pages\Base
 
         $this->add(new SortLink("sortdoc", "meta_desc", $this, "onSort"));
         $this->add(new SortLink("sortnum", "document_number", $this, "onSort"));
-        $this->add(new SortLink("sortdate", "document_id", $this, "onSort"));
+        $this->add(new SortLink("sortdate", "document_date", $this, "onSort"));
         $this->add(new SortLink("sortcust", "customer_name", $this, "onSort"));
         $this->add(new SortLink("sortamount", "amount", $this, "onSort"));
 
@@ -110,6 +111,7 @@ class DocList extends \App\Pages\Base
         $this->statusform->add(new CheckBox('print1'));
 
         $this->statusform->add(new SubmitButton('bprint'))->onClick($this, 'printlabels', true);
+        $this->statusform->add(new SubmitButton('bcopy'))->onClick($this, 'onCopy' );
         $this->add(new ClickLink('csv', $this, 'oncsv'));
 
 
@@ -132,12 +134,14 @@ class DocList extends \App\Pages\Base
 
     public function onErase($sender) {
         $filter = Filter::getFilter("doclist");
-        $filter->to = time();
-        $filter->from = time() - (7 * 24 * 3600);
+        $filter->to = 0;
+        $filter->from = time() - (15 * 24 * 3600);
         $filter->page = 1;
         $filter->doctype = 0;
         $filter->status = 0;
         $filter->author = 0;
+        $filter->store = 0;
+        $filter->mfund = 0;
         $filter->customer = 0;
         $filter->customer_name = '';
 
@@ -145,8 +149,8 @@ class DocList extends \App\Pages\Base
         $filter->searchtext = '';
 
         $this->filter->clean();
-        $this->filter->to->setDate(time());
-        $this->filter->from->setDate(time() - (7 * 24 * 3600));
+        $this->filter->to->setDate(0);
+        $this->filter->from->setDate($filter->from);
         $this->filter->doctype->setValue(0);
         $this->filter->status->setValue(0);
         $this->filter->author->setValue(0);
@@ -161,10 +165,12 @@ class DocList extends \App\Pages\Base
         //запоминаем  форму   фильтра
         $filter = Filter::getFilter("doclist");
         $filter->from = $this->filter->from->getDate();
-        $filter->to = $this->filter->to->getDate(true);
+        $filter->to = $this->filter->to->getDate();
         $filter->doctype = $this->filter->doctype->getValue();
         $filter->author = $this->filter->author->getValue();
         $filter->status = $this->filter->status->getValue();
+        $filter->store = $this->filter->store->getValue();
+        $filter->mfund = $this->filter->mfund->getValue();
         $filter->customer = $this->filter->searchcust->getKey();
         $filter->customer_name = $this->filter->searchcust->getText();
 
@@ -180,12 +186,12 @@ class DocList extends \App\Pages\Base
 
     public function doclistOnRow(\Zippy\Html\DataList\DataRow $row) {
         $doc = $row->getDataItem();
-
         $doc = $doc->cast();
+ 
 
-        $row->add(new Label('name', $doc->meta_desc));
-        $row->add(new Label('number', $doc->document_number));
-
+        $row->add(new ClickLink('name',$this, 'showOnClick'))->setValue($doc->meta_desc);
+        $row->add(new ClickLink('number',$this, 'showOnClick'))->setValue($doc->document_number);
+   
         $row->add(new Label('cust', $doc->customer_name));
         $row->add(new Label('branch', $doc->branch_name));
         $row->add(new Label('date', H::fd($doc->document_date)));
@@ -250,9 +256,17 @@ class DocList extends \App\Pages\Base
         }
         
         $row->add(new ClickLink('qr'))->onClick($this, 'QrOnClick', true);
-        $row->qr->setVisible( (strlen($doc->headerdata['hash']) > 0 ) || strlen(  $doc->getFiscUrl()) > 0   ) ;
+        $row->qr->setVisible( (strlen($doc->headerdata['hash']??'') > 0 ) || strlen(  $doc->getFiscUrl()) > 0   ) ;
         if( !in_array($doc->meta_name,['POSCheck']) ){
            $row->qr->setVisible(false);    
+        }  
+        if( $doc->meta_name == 'OfficeDoc' ){
+            
+            $row->delete->setVisible(false);
+            $row->cancel->setVisible(false);
+            $row->hasscan->setVisible(false);
+            $row->hasnotes->setVisible(false);
+            $row->name->setValue($doc->notes);
         }  
         
 
@@ -347,27 +361,32 @@ class DocList extends \App\Pages\Base
             if($_u->rolename == 'admins') {
                 $u[$_u->user_id]=$_u->username;
             } else {
-                $aclexe = explode(',', $_u->aclexe);
-
-                if (in_array($this->_doc->meta_id, $aclexe)) {
+                                 
+                if( \App\ACL::checkEditDoc($this->_doc,true,false,$_u->user_id) == true ||  \App\ACL::checkExeDoc($this->_doc,true,false,$_u->user_id) == true ||  \App\ACL::checkChangeStateDoc($this->_doc,true,false,$_u->user_id) == true) {
                     $u[$_u->user_id] = $_u->username;
-
-                }
-                $aclstate = explode(',', $_u->aclstate);
-
-                if (in_array($this->_doc->meta_id, $aclstate)) {
-                    $u[$_u->user_id] = $_u->username;
-
                 }
 
             }
         }
         $this->statusform->musers->setOptionList($u);
         $user = System::getUser();
-        if(in_array($user->user_id, array_keys($u))) {
-            $this->statusform->musers->setValue($user->user_id);
+        if(in_array($this->_doc->user_id, array_keys($u))) {
+            $this->statusform->musers->setValue($this->_doc->user_id);
+        } else {
+            $this->statusform->musers->setValue(0);            
         }
 
+        if( $this->_doc->meta_name == 'OfficeDoc' ){
+              
+            if (false == $this->_doc->checkShow($user)) {
+                return;
+            }
+            $this->statusform->setVisible(false);
+            
+
+        }          
+        
+        
     }
 
     //редактирование
@@ -378,11 +397,24 @@ class DocList extends \App\Pages\Base
         }
         $type = H::getMetaType($item->meta_id);
         $class = "\\App\\Pages\\Doc\\" . $type['meta_name'];
+        if($type['meta_name']=='POSCheck') {
+           $class = "\\App\\Pages\\Service\\ARMPos";
+        }
+        
+        
         //   $item = $class::load($item->document_id);
         //запоминаем страницу пагинатора
         $filter = Filter::getFilter("doclist");
         $filter->page = $this->doclist->getCurrentPage();
 
+
+        if( $this->_doc->meta_name == 'OfficeDoc' ){
+              
+            if (false == $this->_doc->checkExe($user)) {
+                return;
+            }
+        }            
+        
         App::Redirect($class, $item->document_id);
     }
 
@@ -466,6 +498,7 @@ class DocList extends \App\Pages\Base
         $this->doclist->Reload(true);
 
     }
+   
     public function cancelOnClick($sender) {
         $this->docview->setVisible(false);
 
@@ -523,7 +556,7 @@ class DocList extends \App\Pages\Base
             $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
             return;
         }
-        if(strlen($doc->headerdata["fiscalnumber"])>0) {
+        if(strlen($doc->headerdata["fiscalnumber"]??'')>0) {
             $this->setWarn('Відмінено фіскалізований документ') ;
 
         }
@@ -546,62 +579,122 @@ class DocList extends \App\Pages\Base
             return;
         }
         $this->_doc = $this->_doc->cast();
-        if ($sender->id == "bap") {
-            $newstate = $this->_doc->headerdata['_state_before_approve_'] > 0 ? $this->_doc->headerdata['_state_before_approve_'] : Document::STATE_APPROVED;
-            $this->_doc->updateStatus($newstate);
 
-            $user = System::getUser();
+        $conn = \ZDB\DB::getConnect();
+        $conn->BeginTrans();
 
-            $n = new \App\Entity\Notify();
-            $n->user_id = $this->_doc->user_id;
-            $n->sender_id = $user->user_id;
-            $n->dateshow = time();
-            $n->message = "Документ {$this->_doc->document_number} затверджено" ;
+        try{
+        
+            if ($sender->id == "bap") {
+                //$this->_doc->headerdata['timeentry'] = time();
+                $this->_doc->document_date=time();
+                $this->_doc->updateStatus(Document::STATE_APPROVED);    
+          
+                $bs=trim($this->_doc->headerdata['_state_before_approve_']??'',',' ) ;
+                if($bs==''){
+                    $bs=''.Document::STATE_APPROVED;
+                } 
+                $states= explode(',', $bs );                
+                foreach( $states as $newstate){
+                    $this->_doc->updateStatus($newstate);    
+                } 
+                
+                $user = System::getUser();
 
-            $n->save();
-        }
-        if ($sender->id == "bref") {
-            $this->_doc->updateStatus(Document::STATE_REFUSED);
+                $n = new \App\Entity\Notify();
+                $n->user_id = $this->_doc->user_id;
+                $n->sender_id = $user->user_id;
+                $n->dateshow = time();
+                $n->message = "Документ {$this->_doc->document_number} затверджено" ;
 
-            $text = trim($this->statusform->refcomment->getText());
+                $n->save();
+            }
+            if ($sender->id == "bref") {
+                $this->_doc->updateStatus(Document::STATE_REFUSED);
 
-            $user = System::getUser();
+                $text = trim($this->statusform->refcomment->getText());
 
-            $n = new \App\Entity\Notify();
-            $n->user_id = $this->_doc->user_id;
-            $n->sender_id = $user->user_id;
-            $n->dateshow = time();
-            $n->message = "Документ {$this->_doc->document_number} відхилено" ;
-            $n->message .= "<br> " . $text;
-            $n->save();
+                $user = System::getUser();
 
-            $this->statusform->refcomment->setText('');
-        }
+                $n = new \App\Entity\Notify();
+                $n->user_id = $this->_doc->user_id;
+                $n->sender_id = $user->user_id;
+                $n->dateshow = time();
+                $n->message = "Документ {$this->_doc->document_number} відхилено" ;
+                $n->message .= "<br> " . $text;
+                $n->save();
 
-
-        if ($sender->id == "bstatus") {
-            $newst =   $this->statusform->mstates->getValue() ;
-            if($newst >0  && $newst != $this->_doc->state) {
-                $this->_doc->updateStatus($newst, true);
+                
+                $this->statusform->refcomment->setText('');
             }
 
 
+            if ($sender->id == "bstatus") {
+                $newst =   $this->statusform->mstates->getValue() ;
+                if($newst >0  && $newst != $this->_doc->state) {
+                    $this->_doc->updateStatus($newst, true);
+                }
+
+
+            }
+            
+            $this->_doc->headerdata['_state_before_approve_'] ='';
+
+            
+            $conn->CommitTrans();
+        }  catch(\Exception $ee){
+            global $logger;
+            $conn->RollbackTrans();
+      
+            $this->setError($ee->getMessage());
+
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            return;
+         
+          
         }
+        
+        
+        
         if ($sender->id == "buser") {
             $user_id = intval($this->statusform->musers->getValue());
             if($user_id==0) {
+                return;
+            }
+            if($user_id==$this->_doc->user_id) {
                 return;
             }
 
             $this->_doc->user_id = $user_id;
             $this->_doc->save();
 
+            $this->_doc->insertLog($this->_doc->state,$this->_doc->user_id);
 
         }
 
         $this->statusform->setVisible(false);
         $this->docview->setVisible(false);
         $this->doclist->Reload($sender->id != "bstatus");
+    }
+
+    public function onCopy($sender) {
+        $doc =   $this->_doc->cast();
+        $doc->document_id=0;
+        $doc->parent_id=0;
+        $doc->user_id= System::getUser()->user_id;
+        $doc->document_number = $doc->nextNumber();
+        $doc->document_date = time();
+        $doc->state = 0; ;
+        $doc->headerdata['contract_id'] = 0;
+        $doc->headerdata['_state_before_approve_'] = '';
+        $doc->save();
+        $doc->updateStatus(Document::STATE_NEW);
+       
+        $this->filter->searchnumber->setText($doc->document_number);
+
+        $this->filterOnSubmit($this->filter); 
+        $this->statusform->setVisible(false) ;
+        $this->docview->setVisible(false) ;      
     }
 
     public function oncsv($sender) {
@@ -636,19 +729,56 @@ class DocList extends \App\Pages\Base
             $items[]=$it;
         }
 
-        $htmls = H::printItems($items, $one ? 1 : 0);
+        $user = \App\System::getUser() ;
+          
+        if(intval($user->prtypelabel) == 0) {
+        
+            $htmls = H::printItems($items, $one ? 1 : 0,array('docnumber'=>$this->_doc->document_number));
 
-        if(\App\System::getUser()->usemobileprinter == 1) {
-            \App\Session::getSession()->printform =  $htmls;
-
-            $this->addAjaxResponse("     window.open('/index.php?p=App/Pages/ShowReport&arg=print')");
-        } else {
-
-            $this->addAjaxResponse("  $('#tag').html('{$htmls}') ; $('#pform').modal()");
-
+            if(\App\System::getUser()->usemobileprinter == 1) {
+                \App\Session::getSession()->printform =  $htmls;
+                $this->addAjaxResponse("     window.open('/index.php?p=App/Pages/ShowReport&arg=print')");
+            } else {
+                $this->addAjaxResponse("  $('#tag').html('{$htmls}') ; $('#pform').modal()");
+            }
+            return;
         }
+        
+        
+        try {
+
+            $ret = H::printItemsEP($items, $one ? 1 : 0,array('docnumber'=>$this->_doc->document_number));
+            if(intval($user->prtypelabel) == 1) {
+                if(strlen($ret)==0) {
+                   $this->addAjaxResponse(" toastr.warning( 'Нема  данних для  друку ' )   ");
+                   return; 
+                }
+                $buf = \App\Printer::xml2comm($ret);
+        
+            }            
+            if(intval($user->prtypelabel) == 2) {
+                if(count($ret)==0) {
+                   $this->addAjaxResponse(" toastr.warning( 'Нема  данних для  друку ' )   ");
+                   return; 
+                }
+                $buf = \App\Printer::arr2comm($ret);
+        
+            }            
+            $b = json_encode($buf) ;
+
+            $this->addAjaxResponse(" sendPSlabel('{$b}') ");
+        } catch(\Exception $e) {
+            $message = $e->getMessage()  ;
+            $message = str_replace(";", "`", $message)  ;
+            $message = str_replace("'", "`", $message)  ;
+            $this->addAjaxResponse(" toastr.error( '{$message}' )         ");
+
+        }        
+        
+        
     }
-  public function QrOnClick($sender) {
+ 
+    public function QrOnClick($sender) {
               
             $doc=$sender->owner->getDataItem();
             $url =_BASEURL . 'doclink/' . $doc->headerdata['hash'] ;
@@ -681,14 +811,24 @@ class DocDataSource implements \Zippy\Interfaces\DataSource
         //$user = System::getUser();
 
         $conn = \ZDB\DB::getConnect();
+        
+        $where = " 1=1 ";
+        
         $filter = Filter::getFilter("doclist");
-        if($usedate) {
-            $where = " date(document_date) >= " . $conn->DBDate($filter->from) . " and  date(document_date) <= " . $conn->DBDate($filter->to);
-        } else {
-            $where = " 1=1 ";
-        }
+        if($usedate == true   ) {
+            if($filter->from > 0) {
+                $where .= " and date(document_date) >= " . $conn->DBDate($filter->from) ;
+            }
+            if($filter->to > 0) {
+                $where .= " and date(document_date) <= " . $conn->DBDate($filter->to) ;
+            }
+        }    
+            
         if ($filter->doctype > 0) {
             $where .= " and meta_id  ={$filter->doctype} ";
+        }
+        if ($filter->status > 0) {
+            $where .= " and state  = {$filter->status} ";
         }
         if ($filter->customer > 0) {
             $where .= " and customer_id  ={$filter->customer} ";
@@ -697,8 +837,11 @@ class DocDataSource implements \Zippy\Interfaces\DataSource
         if ($filter->author > 0) {
             $where .= " and user_id  ={$filter->author} ";
         }
-        if ($filter->status > 0) {
-            $where .= " and state  ={$filter->status} ";
+        if ($filter->mfund > 0) {
+            $where .= " and document_id in(select document_id from paylist where mf_id = {$filter->mfund}   )  ";
+        }
+        if ($filter->store > 0) {
+            $where .= " and document_id in(select document_id from entrylist where stock_id in ( select stock_id from store_stock  where   store_id= {$filter->store} )  )  ";
         }
         $st = $filter->searchtext;
         if (strlen($st) > 2) {

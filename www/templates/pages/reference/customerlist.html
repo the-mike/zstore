@@ -2,10 +2,11 @@
     <head>
         
              <title> Довідник контрагентів</title>
+      <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
  
     </head>
 
-    <body>
+    <body>  
         <div class="row">
             <div class="col-12   col-xl-10  ">
                 <div zippy="customertable">
@@ -19,7 +20,7 @@
                         <form zippy="filter" class="form-inline ">
 
                             <label for="searchkey">Пошук</label>
-                            <input class="form-control mr-sm-2" type="text" zippy="searchkey">
+                            <input class="form-control mr-sm-2" type="search" zippy="searchkey">
                             {{^leadmode}}
                             <label for="searchtype">Тип</label>
                             <select zippy="searchtype" class="form-control mr-sm-2">
@@ -67,12 +68,12 @@
                     
                      <details class="mb-2 ml-2">
                         <summary >Теги</summary>
-                        <span zippy="taglist"></span>
+                        <small zippy="taglist"></small>
                      </details>
                     
                     
                     <a zippy="addnew" class="btn btn-primary">Додати нового</a>
-
+                           
                     <form zippy="listform">
                         <table class="table table-hover   table-sm mt-2">
                             <tr>
@@ -84,7 +85,8 @@
                                 <th >Тел.</th>
                                 <th >E-Mail</th>
                                 {{^leadmode}}        <th  ><a zippy="sortdoc">Док.</a> </th>    {{/leadmode}}
-                                {{#leadmode}}     <th><a zippy="sortleadstatus">стан ліда</a> </th>     {{/leadmode}} 
+                                {{#leadmode}}     <th><a zippy="sortleadstatus">Cтан ліда</a> </th>     {{/leadmode}} 
+                                {{#leadmode}}     <th><a zippy="sortleaddate">Дата</a> </th>     {{/leadmode}} 
                                 <th> </th>
                                 <th> </th>
                                 <th> </th>
@@ -104,6 +106,9 @@
                                 {{^leadmode}}    <td class="text-right" > <span zippy="docs" class="badge badge-secondary badge-pill"></span> </td>  {{/leadmode}}
                                 {{#leadmode}}  
                                 <td zippy="leadstatus">  </td>  
+                                {{/leadmode}}    
+                                {{#leadmode}}  
+                                <td zippy="createddate">  </td>  
                                 {{/leadmode}}    
                                 <td   ><i    zippy="hasaction" class="fa fa-gift"></i></td>
 
@@ -197,7 +202,7 @@
                 </div>
                 {{#shop}}        
                 <div class="form-group">
-                    <label for="editpassword">Пароль логiна для каталогу</label>
+                    <label for="editpassword">Пароль логiна для онлайн-каталогу</label>
                     <input class="form-control" zippy="editpassword"  type="password"/>
                     <small>Залиште порожнiм, якщо пароль не змiнюється</small>
                 </div>
@@ -240,6 +245,10 @@
                 <div class="form-group">
                     <label for="editaddress">Повна адреса</label>
                     <input class="form-control" zippy="editaddress"/>
+                </div>
+                <div class="form-group">
+                    <label for="editaddressdel">Адреса доставки</label>
+                    <input class="form-control" zippy="editaddressdel"/>
                 </div>
 
                 <div class="form-group">
@@ -414,6 +423,10 @@
                         </form>
             </div>
               {{^leadmode}}
+
+
+            {{#iscontract}}
+
             <div class="col-6 col-md-4 col-xl-3 ">
                 <div class="card">
 
@@ -428,23 +441,28 @@
 
 
                 </div>
+            </div>
+             {{/iscontract}}
+            
+            
+            <div class="col-6 col-md-4 col-xl-3 ">
                 <div class="card">
 
-                        <h5> Бонуси </h5>
+                        <h5> Останні документи </h5>
                         <table class="table table-sm">
-                            <tr zippy="dw_bonus">
-                                <td zippy="b_date"></td>
-                                <td zippy="b_doc"></td>
-                                <td zippy="b_bonus" class="text-right"></td>
+                            <tr zippy="dw_doc">
+                                <td><a title="Перейти" zippy="doc"></a></td>
+                                <td class="text-right"><span zippy="doc_amount"></span></td>
+                                <td><span zippy="doc_state"></span></td>
 
                             </tr>
-                            <tr><td></td> <td class="text-right"><b>Всього:</b></td> <td class="text-right"><b zippy="b_total"></b></td>  </tr>
                         </table>
 
 
                 </div>
-                 {{/leadmode}} 
             </div>
+
+            {{/leadmode}}             
         </div>
 
 
@@ -457,11 +475,12 @@
 
                     <table class="table table-sm">
                         <tr zippy="leadsourceslist">
-                            <td><input style="width:250px;" zippy="leadsourcename"  ></td>
+                            <td><input class="form-control" style="width:250px;" zippy="leadsourcename"  ></td>
                             <td><a zippy="delsource"> <i class="fa fa-trash"></i></a></td>
                     </table>
+                    <a  zippy="leadsourcecancel" class="btn btn-outline-primary mr-2">Скасувати</a>
                     <input zippy="leadsourcesave"  type="submit"  value="Зберегти" class="btn  btn-info">
-                    <a  zippy="leadsourcecancel" class="btn btn-outline-primary ">Скасувати</a>
+                    
                 </div>
             </div>
         </form>
@@ -475,11 +494,12 @@
 
                     <table class="table table-sm">
                         <tr zippy="leadstatuseslist">
-                            <td><input style="width:250px;" zippy="leadstatusname"  ></td>
+                            <td><input class="form-control" style="width:250px;" zippy="leadstatusname"  ></td>
                             <td><a zippy="delstatus"> <i class="fa fa-trash"></i></a></td>
                     </table>
+                    <a  zippy="leadstatuscancel" class="btn btn-outline-primary  mr-2">Скасувати</a>
                     <input zippy="leadstatussave"  type="submit"  value="Зберегти" class="btn  btn-info">
-                    <a  zippy="leadstatuscancel" class="btn btn-outline-primary ">Скасувати</a>
+                    
                 </div>
             </div>
         </form>
@@ -673,3 +693,10 @@
 
     </body>
 </html>
+
+
+
+
+
+ 
+ 

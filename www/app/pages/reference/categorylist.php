@@ -23,7 +23,8 @@ class CategoryList extends \App\Pages\Base
 {
     private $_rn=0;
     private $_category;
-    public $_catlist = array();
+    public $_catlist = [];
+    public $_cplist = [];
 
     public function __construct() {
         parent::__construct();
@@ -44,43 +45,67 @@ class CategoryList extends \App\Pages\Base
         $this->categorydetail->add(new TextInput('editprice3'));
         $this->categorydetail->add(new TextInput('editprice4'));
         $this->categorydetail->add(new TextInput('editprice5'));
+        
+        $this->add(new Form('categoryprice'))->setVisible(false);
+        $this->categoryprice->add(new Label('catprname')) ;
+        $this->categoryprice->add(new SubmitButton('savecp'))->onClick($this, 'savepriceOnClick');
+        $this->categoryprice->add(new SubmitButton('calccp'))->onClick($this, 'calcpriceOnClick');
+        $this->categoryprice->add(new  ClickLink("backprice",$this,"cancelOnClick"));
+        $this->categoryprice->add(new TextInput('chprice'));
+        $this->categoryprice->add(new CheckBox('rnd' ));
+        $this->categoryprice->add(new DataView('cplist', new ArrayDataSource($this, '_cplist'), $this, 'pricelistOnRow'));
+        
+        $ptype=[];
+        
         $common = System::getOptions('common');
         if (strlen($common['price1']) > 0) {
             $this->categorydetail->editprice1->setVisible(true);
             $this->categorydetail->editprice1->setAttribute('placeholder', $common['price1']);
+            $ptype[1] = $common['price1'];
         } else {
             $this->categorydetail->editprice1->setVisible(false);
         }
         if (strlen($common['price2']) > 0) {
             $this->categorydetail->editprice2->setVisible(true);
             $this->categorydetail->editprice2->setAttribute('placeholder', $common['price2']);
+            $ptype[2] = $common['price2'];
         } else {
             $this->categorydetail->editprice2->setVisible(false);
         }
         if (strlen($common['price3']) > 0) {
             $this->categorydetail->editprice3->setVisible(true);
             $this->categorydetail->editprice3->setAttribute('placeholder', $common['price3']);
+            $ptype[3] = $common['price3'];
         } else {
             $this->categorydetail->editprice3->setVisible(false);
         }
         if (strlen($common['price4']) > 0) {
             $this->categorydetail->editprice4->setVisible(true);
             $this->categorydetail->editprice4->setAttribute('placeholder', $common['price4']);
-        } else {
+            $ptype[4] = $common['price4'];
+       } else {
             $this->categorydetail->editprice4->setVisible(false);
         }
         if (strlen($common['price5']) > 0) {
             $this->categorydetail->editprice5->setVisible(true);
             $this->categorydetail->editprice5->setAttribute('placeholder', $common['price5']);
-        } else {
+            $ptype[5] = $common['price5'];
+       } else {
             $this->categorydetail->editprice5->setVisible(false);
         }
+
+        $this->categoryprice->add(new DropDownChoice('ptype',$ptype,1 ));
+
+
         $this->categorydetail->add(new \Zippy\Html\Image('editimage', '/loadimage.php?id=0'));
         $this->categorydetail->add(new \Zippy\Html\Form\File('editaddfile'));
         $this->categorydetail->add(new CheckBox('editdelimage'));
         $this->categorydetail->add(new CheckBox('editnoshop'));
         $this->categorydetail->add(new CheckBox('editnofastfood'));
+        $this->categorydetail->add(new CheckBox('editnoprice'));
 
+        
+        
         $this->categorydetail->add(new SubmitButton('save'))->onClick($this, 'saveOnClick');
         $this->categorydetail->add(new Button('cancel'))->onClick($this, 'cancelOnClick');
 
@@ -146,6 +171,7 @@ class CategoryList extends \App\Pages\Base
         $row->add(new ClickLink("up", $this, "OnMove"))->setVisible($this->_rn>0)   ;
         $row->add(new ClickLink("down", $this, "OnMove"))->setVisible($this->_rn<count($this->_catlist)-1)   ;
         $this->_rn++;
+        $row->add(new ClickLink('prices',$this, 'pricesOnClick'))->setVisible(($item->qty ?? 0) > 0);
 
     }
 
@@ -169,6 +195,7 @@ class CategoryList extends \App\Pages\Base
         Category::delete($cat_id);
 
         $this->Reload();
+        $this->resetURL() ;
     }
 
     public function editOnClick($sender) {
@@ -182,7 +209,12 @@ class CategoryList extends \App\Pages\Base
         $this->categorydetail->editparent->setValue($this->_category->parent_id);
         $this->categorydetail->editnoshop->setChecked($this->_category->noshop);
         $this->categorydetail->editnofastfood->setChecked($this->_category->nofastfood);
-
+        $this->categorydetail->editnoprice->setChecked($this->_category->noprice);
+        $this->categorydetail->editnoprice->setVisible(true);
+        if($this->_category->hasChild()) {
+            $this->categorydetail->editnoprice->setChecked(0);
+            $this->categorydetail->editnoprice->setVisible(false);
+        }
         $this->categorydetail->editprice1->setText($this->_category->price1);
         $this->categorydetail->editprice2->setText($this->_category->price2);
         $this->categorydetail->editprice3->setText($this->_category->price3);
@@ -217,11 +249,13 @@ class CategoryList extends \App\Pages\Base
             return;
         }
 
-        $this->_category->parent_id = $this->categorydetail->editparent->getValue();
+        $pid=$this->categorydetail->editparent->getValue() ;
+        $this->_category->parent_id = $pid >0 ? $pid  :null;
         $this->_category->cat_name = $this->categorydetail->editcat_name->getText();
         $this->_category->cat_desc = $this->categorydetail->editcat_desc->getText();
         $this->_category->noshop = $this->categorydetail->editnoshop->isChecked() ? 1 : 0;
         $this->_category->nofastfood = $this->categorydetail->editnofastfood->isChecked() ? 1 : 0;
+        $this->_category->noprice = $this->categorydetail->editnoprice->isChecked() ? 1 : 0;
         if ($this->_category->cat_name == '') {
             $this->setError("Не введено назву");
             return;
@@ -245,6 +279,13 @@ class CategoryList extends \App\Pages\Base
 
         $file = $this->categorydetail->editaddfile->getFile();
         if (strlen($file["tmp_name"]) > 0) {
+            
+            if (filesize($file["tmp_name"])  > pow(2,20)) {
+
+                    $this->setError('Розмір файлу більше 1M');
+                    return;
+            }            
+            
             $imagedata = getimagesize($file["tmp_name"]);
 
             if (preg_match('/(gif|png|jpeg)$/', $imagedata['mime']) == 0) {
@@ -270,15 +311,10 @@ class CategoryList extends \App\Pages\Base
                 if ($imagedata[0] < $imagedata[1]) {
                     $thumb->cropFromCenter($imagedata[0], $imagedata[0]);
                 }
-                $thumb->resize(256, 256);
+                $thumb->resize(512, 512);
                 $image->content = $thumb->getImageAsString();
             }
-            $conn =   \ZDB\DB::getConnect();
-            if($conn->dataProvider=='postgres') {
-                $image->thumb = pg_escape_bytea($image->thumb);
-                $image->content = pg_escape_bytea($image->content);
-
-            }
+       
 
             $image->save();
             $this->_category->image_id = $image->image_id;
@@ -293,6 +329,8 @@ class CategoryList extends \App\Pages\Base
     public function cancelOnClick($sender) {
         $this->categorytable->setVisible(true);
         $this->categorydetail->setVisible(false);
+        $this->categoryprice->setVisible(false);
+        
     }
 
     public function OnMove($sender) {
@@ -348,4 +386,112 @@ class CategoryList extends \App\Pages\Base
         return null;        
     }
 
+    
+    public function pricesOnClick($sender) {
+        $this->_category = $sender->owner->getDataItem();
+        $this->categoryprice->catprname->setText($this->_category->cat_name);        
+        $this->categorytable->setVisible(false);
+        $this->categoryprice->setVisible(true);
+        $this->categoryprice->chprice->setText('');  
+        $this->_cplist=[];
+         
+        $this->categoryprice->cplist->Reload() ;       
+        
+        $this->categoryprice->savecp->setVisible(false);       
+
+    }
+
+    public function savepriceOnClick($sender) {
+        $pt =intval($this->categoryprice->ptype->getValue());
+        if($pt < 1)  return;
+       
+        foreach($this->_cplist as $it ) {
+            
+            if(round($it->newp)==0) continue;
+            
+            $item= \App\Entity\Item::load($it->item_id);
+            $item->{'price'.$pt}   = round($it->newp);
+            $item->save();
+        }
+        
+        
+        $this->categorytable->setVisible(true);
+        $this->categoryprice->setVisible(false);       
+    }
+    
+
+    public function calcpriceOnClick($sender) {
+        $this->_cplist=[];
+       
+         
+        $pt =intval($this->categoryprice->ptype->getValue());
+        if($pt < 1)  return;
+        
+        $v =trim($this->categoryprice->chprice->getText());
+        $isper = strpos($v,'%') > 0;
+        $v = doubleval(str_replace('%','',$v) );
+       
+        $rnd= $this->categoryprice->rnd->isChecked();
+        
+        foreach( \App\Entity\Item::find("disabled <> 1 and  cat_id=". $this->_category->cat_id,'itemname') as $item ) {
+        
+            $ip=$item->{'price'.$pt} ;
+            if(strpos($ip,'%') > 0) continue;
+            if(strlen($ip)== 0) continue;
+            
+            if($isper) {
+               $ipp=  $ip * ($v/100) ;
+               $ip = $ip+$ipp;  
+                
+            }   else {
+               $ip = $ip + $v;    
+            }            
+            $ip = round($ip);  
+         
+            if($rnd) {
+              
+               $ld = $ip % 10;
+               if($ld==0)  $ip = $ip-1;
+               if($ld==1)  $ip = $ip-2;
+               if($ld==2)  $ip = $ip-3;
+               if($ld==3)  $ip = $ip-4;
+               if($ld==4)  $ip = $ip-5;
+               if($ld==5)  $ip = $ip+4;
+               if($ld==6)  $ip = $ip+3;
+               if($ld==7)  $ip = $ip+2;
+               if($ld==8)  $ip = $ip+1;
+                
+            }
+            
+ 
+           
+           $di = new \App\DataItem() ;
+           $di->item_id=$item->item_id;
+           $di->name=$item->itemname;
+           $di->code=$item->item_code;
+           $di->oldp=$item->{'price'.$pt} ;
+           $di->newp=$ip ;
+           
+           $this->_cplist[$item->item_id] = $di;
+           
+           
+        }
+            
+        $this->categoryprice->cplist->Reload() ;       
+
+        $this->categoryprice->savecp->setVisible(true);       
+
+        
+    }
+
+    public function pricelistOnRow($row){
+        $item = $row->getDataItem();
+
+        $row->add(new Label('cplname', $item->name));
+        $row->add(new Label('cplcode', $item->code));
+        $row->add(new Label('cplold', $item->oldp));
+        $row->add(new TextInput('cplnew',new \Zippy\Binding\PropertyBinding($item, 'newp')));
+    }
+    
+   
 }

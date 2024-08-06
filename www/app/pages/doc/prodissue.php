@@ -30,7 +30,11 @@ class ProdIssue extends \App\Pages\Base
     private $_basedocid = 0;
     private $_rowid = -1;
 
-
+    /**
+    * @param mixed $docid      редактирование
+    * @param mixed $basedocid  создание на  основании
+    * @param mixed $st_id      производственный  этап
+    */
     public function __construct($docid = 0, $basedocid = 0, $st_id = 0) {
         parent::__construct();
 
@@ -40,7 +44,7 @@ class ProdIssue extends \App\Pages\Base
         $this->docform->add(new Date('document_date'))->setDate(time());
 
         $this->docform->add(new DropDownChoice('store', Store::getList(), H::getDefStore()));
-        $this->docform->add(new DropDownChoice('parea', \App\Entity\Prodarea::findArray("pa_name", ""), 0));
+        $this->docform->add(new DropDownChoice('parea', \App\Entity\ProdArea::findArray("pa_name", ""), 0));
         $this->docform->add(new TextArea('notes'));
 
         $this->docform->add(new SubmitLink('addrow'))->onClick($this, 'addrowOnClick');
@@ -88,7 +92,7 @@ class ProdIssue extends \App\Pages\Base
 
                         $this->docform->notes->setText('Підстава ' . $basedoc->document_number);
                         $this->docform->parea->setValue($basedoc->headerdata['parea']);
-
+                       //комплекты
                         foreach($basedoc->unpackDetails('prodlist') as $prod) {
                             $set =  \App\Entity\ItemSet::find("item_id > 0  and pitem_id=" . $prod->item_id);
                             foreach($set as $m) {
@@ -102,7 +106,32 @@ class ProdIssue extends \App\Pages\Base
 
                             }
 
-                            $this->_itemlist = array_values($this->_itemlist) ;
+                           // $this->_itemlist = array_values($this->_itemlist) ;
+                        }
+                        //работы
+                        foreach($basedoc->unpackDetails('detaildata') as $s) {
+                            $ser = \App\Entity\Service::load($s->service_id);
+                            if(!is_array($ser->itemset)) {
+                                continue;
+                            }   
+                            foreach($ser->itemset as $m) {
+                                $itemp = \App\Entity\Item::load($m->item_id);
+                                if($itemp == null) {
+                                    continue;
+                                }
+                                $itemp->quantity = $s->quantity * $m->qty;
+                                
+                                if(!isset($this->_itemlist[$itemp->item_id])) {
+
+                                    $this->_itemlist[$itemp->item_id] = Item::load($itemp->item_id);
+                                    $this->_itemlist[$itemp->item_id]->quantity = $itemp->quantity;
+                                }
+                                $this->_itemlist[$itemp->item_id]->quantity +=  $itemp->quantity;
+
+
+                            }
+
+                          //  $this->_itemlist = array_values($this->_itemlist) ;
                         }
 
 
@@ -178,6 +207,10 @@ class ProdIssue extends \App\Pages\Base
 
         $row->add(new Label('snumber', $item->snumber));
         $row->add(new Label('sdate', $item->sdate > 0 ? \App\Helper::fd($item->sdate) : ''));
+        $row->add(new Label('cell', $item->cell));
+        $qty = $item->getQuantity($this->docform->store->getValue());
+        $row->add(new Label('qtyon',H::fqty($qty) ));
+        $row->add(new Label('toorder','В закупку' ))->setAttribute('onclick',"addItemToCO([{$item->item_id}])");
 
         $row->add(new ClickLink('delete'))->onClick($this, 'deleteOnClick');
         $row->add(new ClickLink('edit'))->onClick($this, 'editOnClick');
@@ -353,7 +386,7 @@ class ProdIssue extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }

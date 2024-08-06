@@ -4,9 +4,11 @@ namespace App\Entity\Doc;
 
 use App\Helper as H;
 use App\System;
+use App\Entity\Item;
+use App\Entity\Entry;
 
 /**
- * Класс-сущность  документ расходная  накладая
+ * Класс-сущность  документ заказ
  *
  */
 class Order extends \App\Entity\Doc\Document
@@ -45,14 +47,19 @@ class Order extends \App\Entity\Doc\Document
 
         $firm = H::getFirmData($this->firm_id, $this->branch_id);
 
-
+        $da=  trim($this->headerdata["npaddressfull"] ) ;
+        
+        if(strlen($da)==0) {
+           $da=  trim($this->headerdata["ship_address"] ) ;
+        }
+        
         $header = array('date'            => H::fd($this->document_date),
                         "_detail"         => $detail,
                         "customer_name"   => $this->customer_name,
                         "phone"           => $this->headerdata["phone"],
                         "email"           => $this->headerdata["email"],
                         "delivery"        => $this->headerdata["delivery_name"],
-                        "ship_address"    => strlen($this->headerdata["ship_address"]) > 0 ? $this->headerdata["ship_address"] : false,
+                        "ship_address"    => strlen($da) > 0 ? $da: false,
                         "notes"           => nl2br($this->notes),
                         "outnumber"       => $this->headerdata["outnumber"],
                         "isoutnumber"     => strlen($this->headerdata["outnumber"]) > 0,
@@ -89,15 +96,15 @@ class Order extends \App\Entity\Doc\Document
     public function getRelationBased() {
         $list = array();
         $list['GoodsIssue'] = self::getDesc('GoodsIssue');
-        $list['ProdReceipt'] = self::getDesc('ProdReceipt');
-        if($this->payed==0) {
+        if($this->payed == 0) {
             $list['Invoice'] = self::getDesc('Invoice');
         }
-        $list['POSCheck'] = self::getDesc('POSCheck');
+      //  $list['POSCheck'] = self::getDesc('POSCheck');
         $list['Task'] = self::getDesc('Task');
         $list['TTN'] = self::getDesc('TTN');
         $list['Order'] = self::getDesc('Order');
-        $list['OrderCust'] = self::getDesc('OrderCust');
+        $list['ProdReceipt'] = self::getDesc('ProdReceipt');
+
 
         return $list;
     }
@@ -162,13 +169,62 @@ class Order extends \App\Entity\Doc\Document
         $items = $this->unpackDetails('detaildata')  ;
 
         foreach ($items as $item) {
+            $onstore = H::fqty($item->getQuantity($this->headerdata['store'])) ;
+            $required = $item->quantity - $onstore;
+      
+            //оприходуем  с  производства
+            if ($required >0 && $item->autoincome == 1 && ($item->item_type == Item::TYPE_PROD || $item->item_type == Item::TYPE_HALFPROD)) {
+
+                if ($item->autooutcome == 1) {    //комплекты
+                    $set = \App\Entity\ItemSet::find("pitem_id=" . $item->item_id);
+                    foreach ($set as $part) {
+
+                        $itemp = \App\Entity\Item::load($part->item_id);
+                        if($itemp == null) {
+                            continue;
+                        }
+                        $itemp->quantity = $required * $part->qty;
+
+                        if (false == $itemp->checkMinus($itemp->quantity, $this->headerdata['store'])) {
+                            throw new \Exception("На складі всього ".H::fqty($itemp->getQuantity($this->headerdata['store']))." ТМЦ {$itemp->itemname}. Списання у мінус заборонено");
+                        }
+
+                        $listst = \App\Entity\Stock::pickup($this->headerdata['store'], $itemp);
+
+                        foreach ($listst as $st) {
+                            $sc = new Entry($this->document_id, 0 - $st->quantity * $st->partion, 0 - $st->quantity);
+                            $sc->setStock($st->stock_id);
+                            $sc->tag=Entry::TAG_TOPROD;
+                            $sc->createdon=time();
+
+                            $sc->save();
+                        }
+                    }
+                }
+
+
+                $price = $item->getProdprice();
+
+                if ($price == 0) {
+                    throw new \Exception('Не розраховано собівартість готової продукції '. $item->itemname);
+                }
+                $stock = \App\Entity\Stock::getStock($this->headerdata['store'], $item->item_id, $price, $item->snumber, $item->sdate, true);
+
+                $sc = new Entry($this->document_id, $required * $price, $required);
+                $sc->setStock($stock->stock_id);
+                $sc->tag=Entry::TAG_FROMPROD;
+                $sc->createdon=time();
+
+                $sc->save();
+            }
+       
+        
+        
             if (false == $item->checkMinus($item->quantity, $this->headerdata['store'])) {
                 throw new \Exception("На складі всього ".H::fqty($item->getQuantity($this->headerdata['store']))." ТМЦ {$item->itemname}. Списання у мінус заборонено");
 
             }
-
-        }
-        foreach ($items as $item) {
+ 
 
             $listst = \App\Entity\Stock::pickup($this->headerdata['store'], $item);
 
@@ -176,7 +232,9 @@ class Order extends \App\Entity\Doc\Document
                 $sc = new \App\Entity\Entry($this->document_id, 0 - $st->quantity * $st->partion, 0 - $st->quantity);
                 $sc->setStock($st->stock_id);
                 //  $sc->setOutPrice($item->price  );
-                $sc->tag = \App\Entity\Entry::TAG_RESERV;
+                $sc->tag = Entry::TAG_RESERV;
+                $sc->createdon=time();
+                
                 $sc->save();
 
             }
@@ -197,18 +255,47 @@ class Order extends \App\Entity\Doc\Document
             $this->unreserve()  ;
 
         }
+        if ( $state == self::STATE_READYTOSHIP) {
+
+            $this->unreserve()  ;
+            $this->reserve()  ;
+
+        }
         if ($state == self::STATE_INPROCESS) {
 
+            if(strlen($this->headerdata['promocode']) > 0){
+                \App\Entity\PromoCode::apply($this->headerdata['promocode'],$this);
+            };
 
-
-            $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->payed, $this->headerdata['payment']);
-            if ($payed > 0) {
-                $this->payed = $payed;
+            if($this->payed >0) {
+                $this->payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->payed, $this->headerdata['payment']);
+              
+                \App\Entity\IOState::addIOState($this->document_id, $this->payed, \App\Entity\IOState::TYPE_BASE_INCOME);
             }
-            \App\Entity\IOState::addIOState($this->document_id, $this->payed, \App\Entity\IOState::TYPE_BASE_INCOME);
-
+            $this->DoBalans() ;
 
         }
     }
+    
+    /**
+    * @override
+    */
+    public function DoBalans() {
+          $conn = \ZDB\DB::getConnect();
+          $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
 
+              
+       //платежи       
+        foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where paytype < 1000 and coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = $p['amount'];
+            $b->createdon = strtotime($p['paydate']);
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+             
+    }
+    
 }

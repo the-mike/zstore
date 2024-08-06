@@ -16,7 +16,7 @@ class Basket implements \Zippy\Interfaces\DataSource
         if($basket==null) {
             $basket = new Basket();
 
-            $cl = json_decode($_COOKIE['shop_cart'], true);
+            $cl = json_decode($_COOKIE['shop_cart'] ??"", true);
             if(is_array($cl)) {
                 foreach($cl as $p) {
                     $item=Product::load($p['item_id']) ;
@@ -41,7 +41,7 @@ class Basket implements \Zippy\Interfaces\DataSource
         $p->quantity  = $product->quantity;
         $p->itemname  = $product->itemname;
         $p->item_id   = $product->item_id;
-
+        $p->image_id   = $product->image_id;
 
         if (isset($this->list[$p->item_id])) {
             $this->list[$p->item_id]->quantity++;
@@ -49,6 +49,7 @@ class Basket implements \Zippy\Interfaces\DataSource
             $this->list[$p->item_id] = $p;
         }
         $this->sendCookie();
+        \App\Helper::insertstat(\App\Helper::STAT_CARD_SHOP, 0, 0) ;
 
     }
 
@@ -57,9 +58,9 @@ class Basket implements \Zippy\Interfaces\DataSource
 
     public function deleteProduct($product_id) {
 
-        $this->list_ = $this->list;
+        $list_ = $this->list;
         $this->list = array();
-        foreach ($this->list_ as $p) {
+        foreach ($list_ as $p) {
             if ($p->item_id == $product_id) {
                 continue;
             }

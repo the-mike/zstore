@@ -6,11 +6,8 @@
     <body>
         <div class="row">
             <div class="col-12  col-xl-10">
-                <h3>Товари в дорозі
-                    <i class="fa fa-info-circle" style="cursor:pointer;font-size:16px;" data-container="body"
-                       data-toggle="popover"
-                       data-placement="bottom" data-content="Товари в замовленнях постачальнику зі статусом 'Виконується'"></i>
-                </h3>
+                <h3>Товари в дорозі                </h3>
+                <small>Товари в замовленнях постачальнику зі статусом 'Виконується'</small>
 
                 <div class="navbar nav">
                     <form zippy="filter" class="form-inline">
@@ -29,8 +26,8 @@
                 <div zippy="detail">
                     <div>
                         <a style="cursor:pointer" onclick=" $('#preview').printThis();" title="Друк"><i class="fa fa-print mr-2"></i></a>
-                        <a href="/showreport/xls/custorder" target="_blank" title="Експорт у Excel"><i class="fa fa-file-excel mr-2"></i></a>
-                        <a href="/showreport/pdf/custorder" target="_blank" title="Експорт у PDF"><i class="fa fa-file-pdf mr-2"></i> </a>
+                        <a href="/index.php?p=App/Pages/ShowReport&arg=xls/custorder" target="_blank" title="Експорт у Excel"><i class="fa fa-file-excel mr-2"></i></a>
+                        <a href="/index.php?p=App/Pages/ShowReport&arg=pdf/custorder" target="_blank" title="Експорт у PDF"><i class="fa fa-file-pdf mr-2"></i> </a>
 
                     </div>
                     <div zippy="preview" class="table-responsive-sm">

@@ -7,6 +7,7 @@
         <title>{{appname}}</title>
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noindex">     
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <link rel="stylesheet" href="/assets/css/adminlte.css">
         <!--<link rel="stylesheet" href="/vendor/leon-mbs/zippy/assets/css/bootstrap.css">   -->
@@ -84,8 +85,9 @@
                             </div>
                             <!-- /.col -->
                         </div>
+                        <input zippy="newver" type="hidden">
                     </form>
-               
+                            
 
                 </div>
                 <!-- /.login-card-body -->
@@ -94,16 +96,32 @@
         <div class="row justify-content-center">
             <div class="w-100"></div>
             <div class="col-12 " style="margin-top:200px;">
-                Zippy-склад v{{curversion}} © <a href="http://zippy.com.ua/">zippy.com.ua</a>
+                Zippy-склад © <a href="http://zippy.com.ua/">zippy.com.ua</a>
             </div>
         </div>
 
     <script>
      {{#cron}}
  
-       setTimeout(() => fetch('/crontab.php')  , 30*60*1000);         
+         fetch('/crontab.php')  
      
      {{/cron}} 
+    
+ 
+
+fetch('{{{verurl}}}')
+   .then(response => response.json())
+   .then((response) => {
+       if(response['version'] != '{{curver}}') {
+       
+          $('#newver').val('isnew') 
+       
+       }
+   })
+  
+    
+    
+     
     
     </script>
     

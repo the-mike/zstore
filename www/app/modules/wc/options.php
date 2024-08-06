@@ -28,12 +28,14 @@ class Options extends \App\Pages\Base
         $form->add(new TextInput('site', $modules['wcsite']));
         $form->add(new TextInput('keyc', $modules['wckeyc']));
         $form->add(new TextInput('keys', $modules['wckeys']));
-
+        $form->add(new CheckBox('insertcust', $modules['wcinsertcust']));
         $form->add(new DropDownChoice('defpricetype', \App\Entity\Item::getPriceTypeList(), $modules['wcpricetype']));
         $form->add(new DropDownChoice('api', array('v3' => 'v3', 'v2' => 'v2', 'v1' => 'v1'), $modules['wcapi']));
         $form->add(new CheckBox('ssl', $modules['wcssl']));
         $form->add(new CheckBox('setpayamount', $modules['wcsetpayamount']));
         $form->add(new DropDownChoice('salesource', \App\Helper::getSaleSources(), $modules['wcsalesource']));
+        $form->add(new DropDownChoice('defmf',\App\Entity\MoneyFund::getList(), $modules['wcmf']??0));
+
 
         $form->add(new SubmitButton('save'))->onClick($this, 'saveOnClick');
 
@@ -47,8 +49,10 @@ class Options extends \App\Pages\Base
         $api = $this->cform->api->getValue();
         $ssl = $this->cform->ssl->isChecked() ? 1 : 0;
         $setpayamount = $this->cform->setpayamount->isChecked() ? 1 : 0;
+        $insertcust = $this->cform->insertcust->isChecked() ? 1 : 0;
 
         $pricetype = $this->cform->defpricetype->getValue();
+        $defmf = $this->cform->defmf->getValue();
         $salesource = $this->cform->salesource->getValue();
 
         if (strlen($pricetype) < 2) {
@@ -64,8 +68,10 @@ class Options extends \App\Pages\Base
         $modules['wckeyc'] = $keyc;
         $modules['wckeys'] = $keys;
         $modules['wcapi'] = $api;
+        $modules['wcinsertcust'] = $insertcust;
 
         $modules['wcpricetype'] = $pricetype;
+        $modules['wcmf'] = $defmf;
         $modules['wcsalesource'] = $salesource;
         $modules['wcssl'] = $ssl;
         $modules['wcsetpayamount'] = $setpayamount;
@@ -79,3 +85,5 @@ class Options extends \App\Pages\Base
     }
 
 }
+// ck_30c7fa4fb5f46185ac948add02c7da923de66059
+// cs_2d9b3be72c78dc6752908205520abd0305cc3378

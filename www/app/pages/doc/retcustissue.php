@@ -17,6 +17,7 @@ use Zippy\Html\Form\DropDownChoice;
 use Zippy\Html\Form\Form;
 use Zippy\Html\Form\SubmitButton;
 use Zippy\Html\Form\TextInput;
+use Zippy\Html\Form\CheckBox;
 use Zippy\Html\Label;
 use Zippy\Html\Link\ClickLink;
 use Zippy\Html\Link\SubmitLink;
@@ -31,6 +32,10 @@ class RetCustIssue extends \App\Pages\Base
     private $_basedocid = 0;
     private $_rowid     = 0;
 
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
         if ($docid == 0 && $basedocid == 0) {
@@ -50,6 +55,7 @@ class RetCustIssue extends \App\Pages\Base
 
         $this->docform->add(new TextInput('notes'));
         $this->docform->add(new SubmitLink('addrow'))->onClick($this, 'addrowOnClick');
+        $this->docform->add(new CheckBox('comission', 0));
 
         $this->docform->add(new SubmitButton('savedoc'))->onClick($this, 'savedocOnClick');
         $this->docform->add(new SubmitButton('execdoc'))->onClick($this, 'savedocOnClick');
@@ -88,6 +94,7 @@ class RetCustIssue extends \App\Pages\Base
             if ($this->_doc->payed == 0 && $this->_doc->headerdata['payed'] > 0) {
                 $this->_doc->payed = $this->_doc->headerdata['payed'];
             }
+            $this->docform->comission->setChecked($this->_doc->headerdata['comission']);
 
             $this->docform->editpayed->setText(H::fa($this->_doc->payed));
             $this->docform->payed->setText(H::fa($this->_doc->payed));
@@ -107,6 +114,7 @@ class RetCustIssue extends \App\Pages\Base
                         $this->docform->store->setValue($basedoc->headerdata['store']);
                         $this->docform->customer->setKey($basedoc->customer_id);
                         $this->docform->customer->setText($basedoc->customer_name);
+                        $this->docform->comission->setChecked($basedoc->headerdata['comission']);
 
                         $this->_itemlist = $basedoc->unpackDetails('detaildata');
 
@@ -202,15 +210,12 @@ class RetCustIssue extends \App\Pages\Base
             $this->_itemlist[$this->_rowid] = $item;
         }
 
-        //   $this->docform->setVisible(true);
-
-        //очищаем  форму
-        $this->editdetail->edittovar->setKey(0);
-        $this->editdetail->edittovar->setText('');
-
-        $this->editdetail->editquantity->setText("1");
-
-        $this->editdetail->editprice->setText("");
+        $this->docform->detail->Reload();
+        $this->calcTotal();
+        
+        
+         $this->docform->setVisible(true);
+         $this->editdetail->setVisible(false);
 
     }
 
@@ -224,9 +229,6 @@ class RetCustIssue extends \App\Pages\Base
         $this->editdetail->editquantity->setText("1");
 
         $this->editdetail->editprice->setText("");
-        $this->docform->detail->Reload();
-
-        $this->calcTotal();
     }
 
     public function savedocOnClick($sender) {
@@ -237,6 +239,7 @@ class RetCustIssue extends \App\Pages\Base
         $this->_doc->document_date = $this->docform->document_date->getDate();
         $this->_doc->notes = $this->docform->notes->getText();
         $this->_doc->headerdata['payment'] = $this->docform->payment->getValue();
+        $this->_doc->headerdata['comission'] = $this->docform->comission->isChecked() ? 1:0;
 
         $this->_doc->customer_id = $this->docform->customer->getKey();
         if ($this->_doc->customer_id > 0) {
@@ -256,9 +259,9 @@ class RetCustIssue extends \App\Pages\Base
         }
 
 
-
         $this->_doc->amount = $this->docform->total->getText();
         $this->_doc->payamount = $this->docform->total->getText();
+      
 
         $this->_doc->payed = $this->docform->payed->getText();
         $this->_doc->headerdata['payed'] = $this->docform->payed->getText();
@@ -288,7 +291,7 @@ class RetCustIssue extends \App\Pages\Base
                 }
 
                 $this->_doc->updateStatus(Document::STATE_EXECUTED);
-                if ($this->_doc->payamount > $this->_doc->payed) {
+                if ($this->_doc->payamount > $this->_doc->payed && $this->_doc->headerdata['comission'] != 1) {
                     $this->_doc->updateStatus(Document::STATE_WP);
                 }
 
@@ -309,7 +312,7 @@ class RetCustIssue extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }
@@ -327,9 +330,24 @@ class RetCustIssue extends \App\Pages\Base
 
             $total = $total + $item->amount;
         }
+
+        $payed=  $total;
+        
+        if($this->_basedocid >0) {
+            $parent = Document::load($this->_basedocid) ;
+            
+            $payed = $parent->payamount;
+            
+            
+            $k = 1 - ($parent->amount - $total) / $parent->amount;
+ 
+            $payed  = $payed*$k;           
+        }        
+
+        
         $this->docform->total->setText(H::fa($total));
-        $this->docform->payed->setText(H::fa($total));
-        $this->docform->editpayed->setText(H::fa($total));
+        $this->docform->payed->setText(H::fa($payed));
+        $this->docform->editpayed->setText(H::fa($payed));
     }
 
     public function onPayed($sender) {
@@ -367,6 +385,9 @@ class RetCustIssue extends \App\Pages\Base
         }
         if ($this->docform->payment->getValue() == 0 && $this->_doc->payed > 0) {
             $this->setError("Якщо внесена сума більше нуля, повинна бути обрана каса або рахунок");
+        }
+        if ($this->_doc->headerdata['comission']==1 && $this->_doc->payed > 0) {
+            $this->setError("Оплата не  вноситься якщо Комісія ");
         }
 
         return !$this->isError();

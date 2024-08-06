@@ -37,6 +37,10 @@ class TTN extends \App\Pages\Base
     private $_orderid   = 0;
     private $_changedpos  = false;
 
+     /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
@@ -48,9 +52,10 @@ class TTN extends \App\Pages\Base
         $this->docform->add(new TextInput('document_number'));
 
         $this->docform->add(new Date('document_date'))->setDate(time());
-        $this->docform->add(new Date('sent_date'));
-        $this->docform->add(new Date('delivery_date'));
+        $this->docform->add(new Date('sent_date',time()));
+        $this->docform->add(new Date('delivery_date',time()+24*3600));
         $this->docform->add(new CheckBox('nostore'));
+        $this->docform->add(new CheckBox('payseller'));
 
         $this->docform->add(new TextInput('barcode'));
         $this->docform->add(new SubmitLink('addcode'))->onClick($this, 'addcodeOnClick');
@@ -59,6 +64,7 @@ class TTN extends \App\Pages\Base
         $this->docform->add(new DropDownChoice('salesource', H::getSaleSources(), H::getDefSaleSource()));
 
         $this->docform->add(new SubmitLink('addcust'))->onClick($this, 'addcustOnClick');
+        $this->docform->addcust->setVisible(       \App\ACL::checkEditRef('CustomerList',false));
 
         $this->docform->add(new AutocompleteTextInput('customer'))->onText($this, 'OnAutoCustomer');
         $this->docform->customer->onChange($this, 'OnChangeCustomer');
@@ -134,6 +140,7 @@ class TTN extends \App\Pages\Base
             $this->docform->email->setText($this->_doc->headerdata['email']);
             $this->docform->phone->setText($this->_doc->headerdata['phone']);
             $this->docform->nostore->setChecked($this->_doc->headerdata['nostore']);
+            $this->docform->payseller->setChecked($this->_doc->headerdata['payseller']);
 
             $this->docform->store->setValue($this->_doc->headerdata['store']);
             $this->docform->salesource->setValue($this->_doc->headerdata['salesource']);
@@ -177,9 +184,10 @@ class TTN extends \App\Pages\Base
                         $this->docform->ship_address->setText($basedoc->headerdata['ship_address']);
                         $this->docform->delivery->setValue($basedoc->headerdata['delivery']);
 
-                        if ($basedoc->headerdata['production'] == 1) {
-                            $this->docform->nostore->setChecked(true);
-                        }
+                        $this->_doc->headerdata['bayarea'] = $basedoc->headerdata['bayarea'];
+                        $this->_doc->headerdata['baycity'] = $basedoc->headerdata['baycity'];
+                        $this->_doc->headerdata['baypoint'] = $basedoc->headerdata['baypoint'];
+ 
                         $notfound = array();
                         $order = $basedoc->cast();
 
@@ -205,7 +213,7 @@ class TTN extends \App\Pages\Base
 
                         if($order->headerdata['store']>0) {
                             $this->docform->store->setValue($order->headerdata['store']);
-                            $order->unreserve();
+                            
                         }
 
 
@@ -243,7 +251,7 @@ class TTN extends \App\Pages\Base
 
                         $this->docform->total->setText($invoice->amount);
                         $this->docform->firm->setValue($basedoc->firm_id);
-                        $this->_doc->headerdata['prepaid']  = $basedoc->payamount ;
+
 
                         $this->OnChangeCustomer($this->docform->customer);
 
@@ -284,8 +292,9 @@ class TTN extends \App\Pages\Base
                         if ($basedoc->headerdata["paydisc"] > 0 && $basedoc->amount > 0) {
                             $k = ($basedoc->amount - $basedoc->headerdata["paydisc"]) / $basedoc->amount;
                         }
-                        $this->_doc->headerdata['prepaid']  = $basedoc->payamount ;
 
+                        $this->docform->nostore->setChecked(true);
+                    
 
                         foreach ($basedoc->unpackDetails('detaildata') as $item) {
                             // $item->price = $item->getPrice($basedoc->headerdata['pricetype']);
@@ -308,6 +317,7 @@ class TTN extends \App\Pages\Base
                         $this->docform->salesource->setValue($basedoc->headerdata['salesource']);
                         $this->docform->pricetype->setValue($basedoc->headerdata['pricetype']);
                         $this->docform->store->setValue($basedoc->headerdata['store']);
+                        $this->docform->nostore->setChecked(true);
 
                         $this->docform->firm->setValue($basedoc->firm_id);
 
@@ -607,6 +617,7 @@ class TTN extends \App\Pages\Base
         $this->_doc->headerdata['phone'] = $this->docform->phone->getText();
         $this->_doc->headerdata['email'] = $this->docform->email->getText();
         $this->_doc->headerdata['nostore'] = $this->docform->nostore->isChecked() ? 1 : 0;
+        $this->_doc->headerdata['payseller'] = $this->docform->payseller->isChecked() ? 1 : 0;
 
         if ($this->checkForm() == false) {
             return;
@@ -617,6 +628,10 @@ class TTN extends \App\Pages\Base
         $this->_doc->amount = $this->docform->total->getText();
         $this->_doc->payamount = $this->docform->total->getText();
 
+        if($this->_doc->headerdata['nostore']==1)  {
+            $this->_doc->payamount = 0;
+        }
+        
         $isEdited = $this->_doc->document_id > 0;
 
         if ($sender->id == 'senddoc' && $this->_doc->headerdata['delivery'] > 2 && strlen($this->_doc->headerdata['delivery']) == 0) {
@@ -632,12 +647,42 @@ class TTN extends \App\Pages\Base
                 $this->_basedocid = 0;
             }
             $this->_doc->save();
-            if ($sender->id == 'execdoc') {
+            
+            if ($sender->id == 'execdoc' ||$sender->id == 'senddoc' || $sender->id == 'sendnp') {
+             
+          
+             
+  
                 if (!$isEdited) {
                     $this->_doc->updateStatus(Document::STATE_NEW);
                 }
+  
+             
+             
+                if ($this->_doc->parent_id > 0) {
+                    $basedoc = Document::load($this->_doc->parent_id)->cast();
 
+                    if($this->_changedpos) {
+                        if($this->_changedpos) {
+                            $msg=  "У документа {$this->_doc->document_number}, створеного на підставі {$basedoc->document_number}, користувачем ".\App\System::getUser()->username." змінено перелік ТМЦ "  ;
+                            \App\Entity\Notify::toSystemLog($msg) ;
+                        }
 
+                    }
+                    
+                    if( $basedoc->meta_name =='Order') {
+                        
+
+                        if($basedoc->state == Document::STATE_INPROCESS || $basedoc->state == Document::STATE_READYTOSHIP) {
+                            $basedoc->updateStatus(Document::STATE_INSHIPMENT);
+                        }                            
+                    
+                        
+                        $basedoc->unreserve();
+                    }                    
+                    
+                }  
+ 
                 // проверка на минус  в  количестве
                 $allowminus = System::getOption("common", "allowminus");
                 if ($allowminus != 1) {
@@ -649,55 +694,23 @@ class TTN extends \App\Pages\Base
                             return;
                         }
                     }
-                }
-
-                if ($this->_doc->parent_id > 0) {
-                    $basedoc = Document::load($this->_doc->parent_id);
-
-                    if($this->_changedpos) {
-                        if($this->_changedpos) {
-                            $msg=  "У документа {$this->_doc->document_number}, створеного на підставі {$basedoc->document_number}, користувачем ".\App\System::getUser()->username." был изменен список ТМЦ "  ;
-                            \App\Entity\Notify::toSystemLog($msg) ;
-                        }
-
-                    }
-                }
-
+                }                  
                 $this->_doc->updateStatus(Document::STATE_EXECUTED);
+                
+                           
+             }            
+            
+            
+            if ($sender->id == 'execdoc') {
                 $this->_doc->updateStatus(Document::STATE_READYTOSHIP);
-            } else {
-                if ($sender->id == 'senddoc' || $sender->id == 'sendnp') {
-
-
-                    if (!$isEdited) {
-                        $this->_doc->updateStatus(Document::STATE_NEW);
-                    }
-
-
-                    if ($this->_doc->parent_id > 0) {
-                        $basedoc = Document::load($this->_doc->parent_id);
-
-                        if($this->_changedpos) {
-                            $msg=  "У документа {$this->_doc->document_number}, створеного на підставі {$basedoc->document_number}, користувачем ".\App\System::getUser()->username." был изменен список ТМЦ "  ;
-
-                            \App\Entity\Notify::toSystemLog($msg) ;
-
-                        }
-                    }
-
-
-                    $this->_doc->updateStatus(Document::STATE_EXECUTED);
-                    if ($sender->id == 'senddoc') {
-                        $this->_doc->updateStatus(Document::STATE_INSHIPMENT);
-                    }
-                    if ($sender->id == 'sendnp') {
-                        $this->_doc->updateStatus(Document::STATE_READYTOSHIP);
-                    }
-                    //   $this->_doc->headerdata['sent_date'] = time();
-                    // $this->_doc->save();
-                } else {
-                    $this->_doc->updateStatus($isEdited ? Document::STATE_EDITED : Document::STATE_NEW);
-                }
+            } else  if ($sender->id == 'senddoc') {
+                 $this->_doc->updateStatus(Document::STATE_INSHIPMENT);
+            }
+            else  if ($sender->id == 'sendnp') {
+                 $this->_doc->updateStatus(Document::STATE_READYTOSHIP);
+            }
+            else {
+                $this->_doc->updateStatus($isEdited ? Document::STATE_EDITED : Document::STATE_NEW);
             }
 
 
@@ -716,7 +729,7 @@ class TTN extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }
@@ -888,6 +901,7 @@ class TTN extends \App\Pages\Base
             $this->docform->senddoc->setVisible(true);
             $this->docform->sendnp->setVisible(true);
 
+            $this->docform->payseller->setVisible(true);
             $this->docform->ship_address->setVisible(true);
             $this->docform->ship_number->setVisible($sender->getValue() == Document::DEL_NP);
             $this->docform->ship_amount->setVisible(true);
@@ -897,6 +911,7 @@ class TTN extends \App\Pages\Base
         } else {
             $this->docform->senddoc->setVisible(false);
 
+            $this->docform->payseller->setVisible(false);
             $this->docform->ship_address->setVisible(false);
             $this->docform->ship_number->setVisible(false);
             $this->docform->ship_amount->setVisible(false);

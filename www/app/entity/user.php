@@ -22,6 +22,7 @@ class User extends \ZCL\DB\Entity
         $this->defsalesource = 0;
         $this->deffirm = 0;
         $this->hidesidebar = 0;
+        $this->prturn = 0;
 
         $this->usemobileprinter = 0;
         $this->pagesize = 25;
@@ -50,8 +51,8 @@ class User extends \ZCL\DB\Entity
      *
      */
     protected function afterLoad() {
-        $this->createdon = strtotime($this->createdon);
-        $this->lastactive = strtotime($this->lastactive);
+        $this->createdon = strtotime($this->createdon ?? '');
+        $this->lastactive = strtotime($this->lastactive ?? '');
 
         //доступы  уровня  роли
         $acl = @unserialize($this->roleacl);
@@ -68,8 +69,9 @@ class User extends \ZCL\DB\Entity
         }
 
 
-        $this->noshowpartion = $acl['noshowpartion'];
-        $this->showotherstores = $acl['showotherstores'];
+        $this->canevent = $acl['canevent']??0;
+        $this->noshowpartion = $acl['noshowpartion']??0;
+        $this->showotherstores = $acl['showotherstores']??0;
 
         $this->aclview = $acl['aclview'];
         $this->acledit = $acl['acledit'];
@@ -110,6 +112,9 @@ class User extends \ZCL\DB\Entity
         $this->prtypelabel = $options['prtypelabel']?? 0;
         $this->pwsymlabel = $options['pwsymlabel']?? 0;
         $this->pserverlabel = $options['pserverlabel']?? '';
+        $this->prturn = $options['prturn']?? 0;
+        $this->pcplabel = $options['pcplabel']?? '';
+        $this->pcp = $options['pcp']?? '';
 
         $this->mainpage = $options['mainpage']??'';
         $this->favs = $options['favs']?? '';
@@ -152,6 +157,9 @@ class User extends \ZCL\DB\Entity
         $options['pserverlabel'] = $this->pserverlabel;
         $options['prtypelabel'] = $this->prtypelabel;
         $options['pwsymlabel'] = $this->pwsymlabel;
+        $options['prturn'] = $this->prturn;
+        $options['pcplabel'] = $this->pcplabel;
+        $options['pcp'] = $this->pcp;
 
         $options['mainpage'] = $this->mainpage;
         $options['phone'] = $this->phone;
@@ -183,7 +191,9 @@ class User extends \ZCL\DB\Entity
      */
     public static function getByLogin($login) {
         $conn = \ZDB\DB::getConnect();
-        return User::getFirst('userlogin = ' . $conn->qstr($login));
+        $user = User::getFirst('userlogin = ' . $conn->qstr($login));
+  
+        return $user;
     }
 
     public static function getByEmail($email) {

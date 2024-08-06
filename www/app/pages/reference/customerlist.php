@@ -33,10 +33,11 @@ class CustomerList extends \App\Pages\Base
     public $_msglist         = array();
     public $_eventlist       = array();
     public $_contrtlist      = array();
+    public $_doclist         = array();
     public $_leadstatuseslist = array();
     public $_leadsourceslist = array();
     public $_bonuses = array(); // бонусы  по  контраоентам
-    public $_bonuslist = array(); //история бонусов  контрагента
+
     public $_tag = '' ; 
 
     public function __construct($id = 0) {
@@ -75,6 +76,7 @@ class CustomerList extends \App\Pages\Base
         $this->customertable->listform->add(new SortLink("sortdoc", "docs", $this, "onSort"));
         $this->customertable->listform->add(new SortLink("sortname", "customer_name", $this, "onSort"));
         $this->customertable->listform->add(new SortLink("sortleadstatus", "leadstatus", $this, "onSort"));
+        $this->customertable->listform->add(new SortLink("sortleaddate", "createdon", $this, "onSort"));
 
         $this->customertable->listform->add(new ClickLink('addnew'))->onClick($this, 'addOnClick');
         $this->customertable->listform->add(new ClickLink('showstat'))->onClick($this, 'showStat');
@@ -85,6 +87,7 @@ class CustomerList extends \App\Pages\Base
 
         $this->add(new Form('customerdetail'))->setVisible(false);
         $this->customerdetail->add(new TextInput('editaddress'));
+        $this->customerdetail->add(new TextInput('editaddressdel'));
         $this->customerdetail->add(new TextInput('editcity'));
         $this->customerdetail->add(new TextInput('editcountry'));
         $this->customerdetail->add(new TextInput('editcustomername'));
@@ -115,7 +118,7 @@ class CustomerList extends \App\Pages\Base
 
         $this->add(new Panel('contentview'))->setVisible(false);
         $this->contentview->add(new ClickLink('back'))->onClick($this, 'cancelOnClick');
-        $this->contentview->add(new Label('b_total'));
+
         $this->contentview->add(new Label('concname'));
         $this->contentview->add(new Label('concreated'));
         $this->contentview->add(new Label('conlastdoc'));
@@ -168,7 +171,9 @@ class CustomerList extends \App\Pages\Base
         $this->leadstatusesform->add(new DataView('leadstatuseslist', new ArrayDataSource(new Bind($this, '_leadstatuseslist')), $this, 'leadstatusListOnRow'));
 
         $this->contentview->add(new DataView('dw_contr', new ArrayDataSource(new Bind($this, '_contrlist')), $this, 'contrListOnRow'));
-        $this->contentview->add(new DataView('dw_bonus', new ArrayDataSource(new Bind($this, '_bonuslist')), $this, 'bonusListOnRow'));
+
+        $this->contentview->add(new DataView('dw_doc', new ArrayDataSource(new Bind($this, '_doclist')), $this, 'docListOnRow'));
+
 
         if ($id > 0) {
             $this->_customer = Customer::load($id);
@@ -186,7 +191,7 @@ class CustomerList extends \App\Pages\Base
           
        
           $this->customertable->taglist->Clear();
-          $tags = \App\Entity\Tag::getTags(1 ) ;
+          $tags = \App\Entity\Tag::getTags(\App\Entity\Tag::TYPE_CUSTOMER ) ;
           foreach ($tags as $tag) {
              $this->customertable->taglist->addClickLink($tag, '#'.$tag);
           }           
@@ -225,6 +230,7 @@ class CustomerList extends \App\Pages\Base
         $row->add(new Label('customerphone', $item->phone));
         $row->add(new Label('customeremail', $item->email));
         $row->add(new Label('leadstatus', $item->leadstatus));
+        $row->add(new Label('createddate', Helper::fd($item->createdon)));
         $row->add(new Label('docs', $item->docs))->setVisible($item->docs > 0);
 
         $row->add(new Label('customercomment'))->setVisible(strlen($item->comment) > 0 && $item->comment == strip_tags($item->comment));
@@ -295,6 +301,7 @@ class CustomerList extends \App\Pages\Base
         $this->customerdetail->editviber->setText($this->_customer->viber);
         $this->customerdetail->editemail->setText($this->_customer->email);
         $this->customerdetail->editaddress->setText($this->_customer->address);
+        $this->customerdetail->editaddressdel->setText($this->_customer->addressdel);
         $this->customerdetail->editcity->setText($this->_customer->city);
         $this->customerdetail->editedrpou->setText($this->_customer->edrpou);
         $this->customerdetail->editcountry->setText($this->_customer->country);
@@ -311,8 +318,8 @@ class CustomerList extends \App\Pages\Base
         $this->customerdetail->editjurid->setChecked($this->_customer->jurid);
         $this->customerdetail->editisholding->setChecked($this->_customer->isholding);
         
-        $this->customerdetail->edittags->setTags(\App\Entity\Tag::getTags(1,$this->_customer->customer_id));
-        $this->customerdetail->edittags->setSuggestions(\App\Entity\Tag::getSuggestions(1));
+        $this->customerdetail->edittags->setTags(\App\Entity\Tag::getTags(\App\Entity\Tag::TYPE_CUSTOMER,(int)$this->_customer->customer_id));
+        $this->customerdetail->edittags->setSuggestions(\App\Entity\Tag::getSuggestions(\App\Entity\Tag::TYPE_CUSTOMER));
         
     }
 
@@ -328,7 +335,6 @@ class CustomerList extends \App\Pages\Base
             return;
         }
 
-        \App\Entity\Tag::updateTags([],1,$id) ;
         $this->Reload();
 
     }
@@ -339,7 +345,7 @@ class CustomerList extends \App\Pages\Base
         // Очищаем  форму
         $this->customerdetail->clean();
         $this->customerdetail->edittags->setTags(array());
-        $this->customerdetail->edittags->setSuggestions(\App\Entity\Tag::getSuggestions(1) );
+        $this->customerdetail->edittags->setSuggestions(\App\Entity\Tag::getSuggestions( \App\Entity\Tag::TYPE_CUSTOMER) );
  
         $this->contentview->setVisible(false);
 
@@ -362,6 +368,7 @@ class CustomerList extends \App\Pages\Base
         $this->_customer->viber = $this->customerdetail->editviber->getText();
         $this->_customer->email = $this->customerdetail->editemail->getText();
         $this->_customer->address = $this->customerdetail->editaddress->getText();
+        $this->_customer->addressdel = $this->customerdetail->editaddressdel->getText();
         $this->_customer->city = $this->customerdetail->editcity->getText();
         $this->_customer->edrpou = $this->customerdetail->editedrpou->getText();
         $this->_customer->country = $this->customerdetail->editcountry->getText();
@@ -420,11 +427,6 @@ class CustomerList extends \App\Pages\Base
             }
         }
 
-        if ($this->_customer->customer_id == 0) { //новый
-            $this->_customer->createdon = time();
-            $this->_customer->user_id = System::getUser()->user_id;
-        }
-
 
         $pass = $this->customerdetail->editpassword->getText();
         $confirm = $this->customerdetail->editconfirm->getText();
@@ -451,7 +453,7 @@ class CustomerList extends \App\Pages\Base
          
         $tags = $this->customerdetail->edittags->getTags() ;
         
-        \App\Entity\Tag::updateTags($tags,1,$this->_customer->customer_id) ;
+        \App\Entity\Tag::updateTags($tags,\App\Entity\Tag::TYPE_CUSTOMER,(int)$this->_customer->customer_id) ;
 
         
         $this->customerdetail->setVisible(false);
@@ -494,7 +496,7 @@ class CustomerList extends \App\Pages\Base
             $lastdoc = "Останній документ {$doc->document_number} від ".Helper::fd($doc->document_date).". Всього " .$this->_customer->docs    ;
         }
 
-        $this->contentview->b_total->setText($this->_customer->getBonus());
+
         $this->contentview->concreated->setText($created);
         $this->contentview->conlastdoc->setText($lastdoc);
         $this->contentview->conphone->setText($this->_customer->phone);
@@ -507,12 +509,14 @@ class CustomerList extends \App\Pages\Base
         $this->updateMessages();
         $this->updateEvents();
         $this->updateContrs();
-        $this->updateBonus();
+        $this->updateDocs();
+
         
         $this->_tag='';
          
         // $this->goAnkor('contentviewlink');
     }
+ 
     public function OnTagList($sender) {
         $this->_tag  = $sender->getSelectedValue();
 
@@ -667,14 +671,17 @@ class CustomerList extends \App\Pages\Base
     }
 
     private function updateContrs() {
-        $this->_contrlist = \App\Entity\Contract::find(' disabled<> 1 and  customer_id=' . $this->_customer->customer_id);
+        $this->_contrlist = \App\Entity\Contract::find(' disabled<> 1 and  customer_id=' . $this->_customer->customer_id,'contract_id desc');
         $this->contentview->dw_contr->Reload();
-    }
-    private function updateBonus() {
-        $this->_bonuslist = $this->_customer->getBonuses();
-        $this->contentview->dw_bonus->Reload();
+        $this->_tvars['iscontract'] = count($this->_contrlist) > 0; 
     }
 
+    private function updateDocs() {
+        $this->_doclist = \App\Entity\doc\Document::find(' state <> 9 and  customer_id=' . $this->_customer->customer_id,'document_date desc',10);
+        $this->contentview->dw_doc->Reload();
+
+    }
+ 
     //вывод строки  коментария
     public function eventListOnRow(DataRow $row) {
         $event = $row->getDataItem();
@@ -704,6 +711,16 @@ class CustomerList extends \App\Pages\Base
         $row->contract->setValue($contr->contract_number);
     }
 
+    public function docListOnRow(DataRow $row) {
+        $doc = $row->getDataItem();
+
+        $row->add(new Label('doc_amount',  Helper::fa($doc->amount) ));
+        $row->add(new Label('doc_state',   \App\Entity\doc\Document::getStateName($doc->state) ));
+
+        $row->add(new ClickLink('doc'))->onClick($this, 'docOnClick');
+        $row->doc->setValue($doc->document_number);
+    }
+
     public function bonusListOnRow(DataRow $row) {
         $b = $row->getDataItem();
         $row->add(new Label('b_date', Helper::fd($b->paydate)));
@@ -716,6 +733,12 @@ class CustomerList extends \App\Pages\Base
         $contr = $sender->owner->getDataItem();
 
         \App\Application::Redirect("\\App\\Pages\\Reference\\ContractList", $contr->contract_id);
+    }
+
+    public function docOnClick($sender) {
+        $doc = $sender->owner->getDataItem();
+
+        \App\Application::Redirect("\\App\\Pages\\Register\\DocList", $doc->document_id);
     }
 
     public function OnSelStatus($sender) {

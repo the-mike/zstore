@@ -162,6 +162,9 @@ class Util
         if($phonel==12 && strlen($tel)==10) {
             $tel = '38'.$tel ;
         }
+        if($phonel==10 && strlen($tel)==12) {
+            $tel = substr($tel,2) ;
+        }
 
         return $tel;
     }
@@ -212,6 +215,30 @@ class Util
 
         }
         return  $r;
+    }
+    
+    //разбивка  на строки  по пробелам
+    public static function splitstr($text,$length) {
+        $lines =[];
+        
+        $words = self::strtoarray($text) ;
+        
+        $line="";
+        foreach($words as $w ) {
+            
+            if(mb_strlen($line)  + mb_strlen($w)  <=$length ) {
+                $line =  $line . $w .' ';
+            } else {
+                 $lines[] = trim($line) ; 
+                  $line="";      
+            }
+            
+        }
+        if(strlen($line)>0) {
+           $lines[] = trim($line) ; 
+        }
+        
+        return $lines;
     }
 }
 

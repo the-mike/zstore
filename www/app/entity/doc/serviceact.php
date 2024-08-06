@@ -22,6 +22,7 @@ class ServiceAct extends Document
             $detail[] = array("no"           => $i++,
                               "service_name" => $ser->service_name,
                               "desc"         => $ser->desc,
+                              "msr"         => $ser->msr,
                               "qty"          => H::fqty($ser->quantity),
                               "price"        => H::fa($ser->price),
                               "amount"       => H::fa($ser->price * $ser->quantity)
@@ -31,11 +32,13 @@ class ServiceAct extends Document
             $detail[] = array("no"           => $i++,
                               "service_name" => $ser->itemname,
                               "desc"         => $ser->item_code . ( strlen($ser->snumber) >0 ? ' с/н: '. $ser->snumber :'') ,
+                              "msr"         => $ser->msr . ( strlen($ser->snumber) >0 ? ' с/н: '. $ser->snumber :'') ,
                               "qty"          => H::fqty($ser->quantity),
                               "price"        => H::fa($ser->price),
                               "amount"       => H::fa($ser->price * $ser->quantity)
             );
         }
+        $totalstr =  \App\Util::money2str_ua($this->payamount);
 
         $header = array('date'            => H::fd($this->document_date),
                         "_detail"         => $detail,
@@ -47,6 +50,7 @@ class ServiceAct extends Document
                         "isfirm"          => strlen($firm["firm_name"]) > 0,
                         "iscontract"      => $this->headerdata["contract_id"] > 0,
                         "totaldisc"           => $this->headerdata["totaldisc"] > 0 ? H::fa($this->headerdata["totaldisc"]) : false,
+                        "totalstr"        => $totalstr,
                         "bonus"           => $this->headerdata["bonus"] > 0 ? H::fa($this->headerdata["bonus"]) : false,
                         "devsn"           => $this->headerdata["devsn"],
                         "devdesc"           => $this->headerdata["devdesc"],
@@ -98,14 +102,12 @@ class ServiceAct extends Document
 
             $this->DoStore() ;
 
-
-
         }
 
 
         if ($state == self::STATE_FINISHED) {
 
-            $this->DoStore() ;
+          //  $this->DoStore() ;
 
             $dd =      doubleval($this->headerdata['totaldisc'])   ;
             $k = 1;   //учитываем  скидку
@@ -129,11 +131,10 @@ class ServiceAct extends Document
     }
 
     public function DoPayment() {
-        $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->payed, $this->headerdata['payment']);
-        if ($payed > 0) {
-            $this->payed = $payed;
-        }
+        $this->payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->headerdata['payed'], $this->headerdata['payment']);
+    
         \App\Entity\IOState::addIOState($this->document_id, $this->payed, \App\Entity\IOState::TYPE_BASE_INCOME);
+        $this->DoBalans() ;
 
     }
 
@@ -157,13 +158,57 @@ class ServiceAct extends Document
             foreach ($listst as $st) {
                 $sc = new Entry($this->document_id, 0 - $st->quantity * $st->partion, 0 - $st->quantity);
                 $sc->setStock($st->stock_id);
-
+                if($this->headerdata['timeentry'] >0) {
+                   $sc->createdon =  $this->headerdata['timeentry'];
+                }
                 $sc->setOutPrice($item->price * $k);
-                $sc->tag = Entry::TAG_SELL;
+                $sc->tag = \App\Entity\Entry::TAG_SELL;
                 $sc->save();
 
             }
         }
+       
+       
+       if($this->headerdata['store'] >0) {
+       //списание  комплектов 
+           foreach ($this->unpackDetails('detaildata') as $s) {
+                $ser = \App\Entity\Service::load($s->service_id);
+                if(!is_array($ser->itemset)) {
+                    continue;
+                }
+       
+               
+                foreach ($ser->itemset as $part) {
+
+                    $itemp = \App\Entity\Item::load($part->item_id);
+                    if($itemp == null) {
+                        continue;
+                    }
+                    $itemp->quantity = $s->quantity * $part->qty;
+
+                    if (false == $itemp->checkMinus($itemp->quantity, $this->headerdata['store'])) {
+                        throw new \Exception("На складі всього ".H::fqty($itemp->getQuantity($this->headerdata['store']))." ТМЦ {$itemp->itemname}. Списання у мінус заборонено");
+                    }
+
+                    $listst = \App\Entity\Stock::pickup($this->headerdata['store'], $itemp);
+
+                    foreach ($listst as $st) {
+                        $sc = new Entry($this->document_id, 0 - $st->quantity * $st->partion, 0 - $st->quantity);
+                        $sc->setStock($st->stock_id);
+                        $sc->tag=\App\Entity\Entry::TAG_TOPROD;
+                        if($this->headerdata['timeentry'] >0) {
+                           $sc->createdon =  $this->headerdata['timeentry'];
+                        }
+     
+                        $sc->save();
+                    }
+                }           
+               
+     
+               
+                    
+           } 
+       } 
     }
 
     public function supportedExport() {
@@ -259,11 +304,41 @@ class ServiceAct extends Document
         $list = array();
         $list['Task'] = self::getDesc('Task');
         $list['ProdIssue'] = self::getDesc('ProdIssue');
-        $list['Invoice'] = self::getDesc('Invoice');
+//        $list['Invoice'] = self::getDesc('Invoice');
         $list['ServiceAct'] = self::getDesc('ServiceAct');
         $list['Warranty'] = self::getDesc('Warranty');
+        $list['POSCheck'] = self::getDesc('POSCheck');
 
         return $list;
+    }
+
+    /**
+    * @override
+    */
+    public function DoBalans() {
+          $conn = \ZDB\DB::getConnect();
+          $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
+
+              
+
+           if($this->payamount >0) {
+                $b = new \App\Entity\CustAcc();
+                $b->customer_id = $this->customer_id;
+                $b->document_id = $this->document_id;
+                $b->amount = 0-$this->payamount;
+                $b->optype = \App\Entity\CustAcc::BUYER;
+                $b->save();
+            }
+           //платежи       
+            foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where paytype < 1000 and   coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+                $b = new \App\Entity\CustAcc();
+                $b->customer_id = $this->customer_id;
+                $b->document_id = $this->document_id;
+                $b->amount = $p['amount'];
+                $b->createdon = strtotime($p['paydate']);
+                $b->optype = \App\Entity\CustAcc::BUYER;
+                $b->save();
+            } 
     }
 
 }

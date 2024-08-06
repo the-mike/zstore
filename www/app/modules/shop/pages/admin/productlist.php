@@ -214,6 +214,13 @@ class ProductList extends \App\Pages\Base
 
         $file = $sender->photo->getFile();
         if (strlen($file["tmp_name"]) > 0) {
+        
+            if (filesize($file["tmp_name"])  > pow(2,20)) {
+
+                    $this->setError('Розмір файлу більше 1M');
+                    return;
+            }            
+         
             $imagedata = getimagesize($file["tmp_name"]);
 
             if (preg_match('/(gif|png|jpeg)$/', $imagedata['mime']) == 0) {
@@ -243,14 +250,9 @@ class ProductList extends \App\Pages\Base
                 $image->content = $thumb->getImageAsString();
             }
 
-            $thumb->resize(256, 256);
+            $thumb->resize(512, 512);
             $image->thumb = $thumb->getImageAsString();
-            $conn =   \ZDB\DB::getConnect();
-            if($conn->dataProvider=='postgres') {
-                $image->thumb = pg_escape_bytea($image->thumb);
-                $image->content = pg_escape_bytea($image->content);
-
-            }
+         
 
             $image->save();
             $this->_item->productdata->images[] = $image->image_id;
@@ -263,7 +265,7 @@ class ProductList extends \App\Pages\Base
 
     public function imglistOnRow($row) {
         $image = $row->getDataItem();
-        $row->add(new \Zippy\html\Image("imgitem"))->setUrl('/loadshopimage.php?id=' . $image->image_id . "&t=t");
+        $row->add(new \Zippy\Html\Image("imgitem"))->setUrl('/loadshopimage.php?id=' . $image->image_id . "&t=t");
         $row->add(new ClickLink("idel", $this, "idelOnClick"));
     }
 
@@ -451,7 +453,7 @@ class AttributeComponent extends \Zippy\Html\CustomComponent implements \Zippy\I
     }
 
     public function clean() {
-        $this->value = array();
+      //  $this->value = array();
     }
 
 }

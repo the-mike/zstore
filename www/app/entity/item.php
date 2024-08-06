@@ -24,6 +24,7 @@ class Item extends \ZCL\DB\Entity
         $this->cat_id = 0;
         $this->item_type = self::TYPE_TOVAR;
         $this->msr = "шт";
+        $this->notes = "";
 
         $this->price = 0;
         $this->image_id = 0;
@@ -31,6 +32,7 @@ class Item extends \ZCL\DB\Entity
         $this->noshop = 0;
         $this->foodstate = 0;
         $this->reclist = array();
+        $this->printqty = 1;      
     }
 
     protected function afterLoad() {
@@ -68,6 +70,7 @@ class Item extends \ZCL\DB\Entity
         $this->sef = (string)$xml->sef[0];
         $this->url = (string)$xml->url[0];
         $this->country = (string)$xml->country[0];
+        $this->notes = (string)$xml->notes[0];
         $reclist = (string)$xml->reclist[0];
 
         if(strlen($reclist) >0) {
@@ -75,6 +78,7 @@ class Item extends \ZCL\DB\Entity
         }
 
 
+        $this->uktz = (string)$xml->uktz[0];
         $this->cell = (string)$xml->cell[0];
         //  $this->octoreoptions = (string) $xml->octoreoptions[0];
         $brprice = (string)$xml->brprice[0];
@@ -128,6 +132,7 @@ class Item extends \ZCL\DB\Entity
         $this->detail .= "<autoincome>{$this->autoincome}</autoincome>";
         $this->detail .= "<useserial>{$this->useserial}</useserial>";
 
+        $this->detail .= "<uktz>{$this->uktz}</uktz>";
         $this->detail .= "<cell>{$this->cell}</cell>";
         //   $this->detail .= "<octoreoptions><![CDATA[{$this->octoreoptions}]]></octoreoptions>";
         $this->detail .= "<manufacturer><![CDATA[{$this->manufacturer}]]></manufacturer>";
@@ -135,6 +140,7 @@ class Item extends \ZCL\DB\Entity
         $this->detail .= "<warranty><![CDATA[{$this->warranty}]]></warranty>";
         $this->detail .= "<extdata><![CDATA[{$this->extdata}]]></extdata>";
         $this->detail .= "<country><![CDATA[{$this->country}]]></country>";
+        $this->detail .= "<notes><![CDATA[{$this->notes}]]></notes>";
         $this->detail .= "<techcard><![CDATA[{$this->techcard}]]></techcard>";
 
         $this->detail .= "<price1>{$this->price1}</price1>";
@@ -211,6 +217,9 @@ class Item extends \ZCL\DB\Entity
         if ($this->image_id > 0) {
             \App\Entity\Image::delete($this->image_id);
         }
+        
+        \App\Entity\Tag::updateTags([],   \App\Entity\Tag::TYPE_ITEM,$this->item_id) ;
+        
     }
 
     //Вычисляет  отпускную цену без скидок
@@ -254,9 +263,9 @@ class Item extends \ZCL\DB\Entity
             if (is_numeric($ret)) {
                 if ($partion == 0) {
                     //ищем последнюю закупочную  цену
-                    $partion = $this->getLastPartion($store);
+                    $partion = $this->getLastPartion($store,"",true);
                 }
-                $price = $partion + (int)$partion / 100 * $ret;
+                $price = $partion + doubleval($partion) / 100 * $ret;
 
             }
         } else {
@@ -270,22 +279,22 @@ class Item extends \ZCL\DB\Entity
             if ($cat != null) {
                 if ($partion == 0) {
                     //ищем последнюю закупочную  цену
-                    $partion = $this->getLastPartion($store);
+                    $partion = $this->getLastPartion($store,"",true);
                 }
                 if ($_price_ == 'price1' && $cat->price1 > 0) {
-                    $price = $partion + (int)$partion / 100 * $cat->price1;
+                    $price = $partion + doubleval($partion)  / 100 * $cat->price1;
                 }
                 if ($_price_ == 'price2' && $cat->price2 > 0) {
-                    $price = $partion + (int)$partion / 100 * $cat->price2;
+                    $price = $partion + doubleval($partion)  / 100 * $cat->price2;
                 }
                 if ($_price_ == 'price3' && $cat->price3 > 0) {
-                    $price = $partion + (int)$partion / 100 * $cat->price3;
+                    $price = $partion + doubleval($partion)  / 100 * $cat->price3;
                 }
                 if ($_price_ == 'price4' && $cat->price4 > 0) {
-                    $price = $partion + (int)$partion / 100 * $cat->price4;
+                    $price = $partion + doubleval($partion)  / 100 * $cat->price4;
                 }
                 if ($_price_ == 'price5' && $cat->price5 > 0) {
-                    $price = $partion + (int)$partion / 100 * $cat->price5;
+                    $price = $partion + doubleval($partion)  / 100 * $cat->price5;
                 }
 
 
@@ -298,7 +307,7 @@ class Item extends \ZCL\DB\Entity
 
             if ($partion == 0) {
                 //ищем последнюю закупочную  цену
-                $partion = $this->getLastPartion($store);
+                $partion = $this->getLastPartion($store,"",true);
             }
 
             $price = $partion + (doubleval($partion) / 100) * $common['defprice'];
@@ -307,17 +316,18 @@ class Item extends \ZCL\DB\Entity
 
 
         //если  не  задана  наценка и цена  то  берем  закупочную
+        /*
         if (intval($common['defprice']) == 0 && $price == 0) {
 
             if ($partion == 0) {
                 //ищем последнюю закупочную  цену
-                $partion = $this->getLastPartion($store);
+                $partion = $this->getLastPartion($store,"",true);
             }
             $price =  $partion;
 
 
         }
-
+         */
         //курсовая разница
         if($common['useval']==1) {
             $opv = \App\System::getOptions("val");
@@ -479,11 +489,33 @@ class Item extends \ZCL\DB\Entity
 
 
     //последняя  партия true по  приходу  false по расходу
-    public function getLastPartion($store = 0, $snumber = "", $gi = true) {
+    public function getLastPartion($store = 0, $snumber = "", $in = true) {
         $conn = \ZDB\DB::getConnect();
-        $q = $gi == true ? "e.quantity >0" : "e.quantity <0";
+        $q = $in == true ? "e.quantity >0" : "e.quantity < 0";
 
-        $sql = "  select coalesce(partion,0)  from  store_stock st join entrylist e  on st.stock_id = e.stock_id where {$q} and  st.partion>0 and    st.item_id = {$this->item_id}   ";
+        $sql = "  select coalesce(partion,0) as p  from  store_stock st join entrylist e  on st.stock_id = e.stock_id where {$q} and  st.partion>0 and    st.item_id = {$this->item_id}   ";
+
+        if ($store > 0) {
+            $sql = $sql . " and st.store_id=" . intval($store);
+        }
+        if (strlen($snumber) > 0) {
+            $sql .= "  and  st.snumber =  " . $conn->qstr($snumber);
+        }
+     
+        $sql = $sql . " order  by  e.entry_id desc  "  ;
+
+        foreach($conn->Execute($sql) as $r) {
+           return doubleval($r['p']);            
+        }
+        
+        return 0;
+    }
+
+    //средняя  учетная  цена
+    public function getPartion($store = 0, $snumber = "") {
+        $conn = \ZDB\DB::getConnect();
+
+        $sql = "  select coalesce(sum(partion*qty),0) as p,coalesce(sum(qty),0) as q from  store_stock st  where     st.item_id = {$this->item_id}   ";
 
         if ($store > 0) {
             $sql = $sql . " and st.store_id=" . $store;
@@ -491,15 +523,21 @@ class Item extends \ZCL\DB\Entity
         if (strlen($snumber) > 0) {
             $sql .= "  and  st.snumber =  " . $conn->qstr($snumber);
         }
-        $limit =" limit 0,1";
-        if($conn->dataProvider=="postgres") {
-            $limit =" limit 1";
+     
+        $price=0;
+
+        $r=$conn->GetRow($sql) ;
+        
+        if($r['q'] <> 0) {
+          $price  =  abs($r['p']/$r['q']); 
         }
-        $sql = $sql . " order  by  e.document_id desc  ".$limit;
-
-        return doubleval($conn->GetOne($sql));
+        
+        $price = number_format($price, 2, '.', '') ;
+        
+        return doubleval($price);
     }
-
+    
+    
     public static function getPriceTypeList() {
 
         $common = \App\System::getOptions("common");
@@ -532,7 +570,7 @@ class Item extends \ZCL\DB\Entity
      * @param mixed $snumber партия проиводителя
      */
     public function getQuantity($store_id = 0, $snumber = "", $date=0) {
-        $cstr = \App\Acl::getStoreBranchConstraint();
+        $cstr = \App\ACL::getStoreBranchConstraint();
         if (strlen($cstr) > 0) {
             $cstr = "    store_id in ({$cstr})  and   ";
         }
@@ -565,7 +603,7 @@ class Item extends \ZCL\DB\Entity
      * @param mixed $store_id
      */
     public function getAmount($store_id = 0) {
-        $cstr = \App\Acl::getStoreBranchConstraint();
+        $cstr = \App\ACL::getStoreBranchConstraint();
         if (strlen($cstr) > 0) {
             $cstr = "    store_id in ({$cstr})  and   ";
         }
@@ -636,9 +674,7 @@ class Item extends \ZCL\DB\Entity
         }
 
         $limit =" limit 0,1";
-        if($conn->dataProvider=="postgres") {
-            $limit =" limit 1";
-        }
+  
         $sql .= " order  by  sdate  desc ". $limit;
 
 
@@ -692,26 +728,55 @@ class Item extends \ZCL\DB\Entity
      *
      */
     public static function getNextArticle() {
+        
+        if (\App\System::getOption("common", "autoarticle") != 1) {
+            return "";    //не генерим
+        }        
+        
         $conn = \ZDB\DB::getConnect();
-
-        $sql = "  select coalesce(max(item_id),0)   from  items ";
-        $id = $conn->GetOne($sql);
-        if($id>0) {
-            $last = Item::load($id);
-
-            if(strpos($last->item_code, "ID") == 0) {
-                $a =  str_replace("ID", "", $last->item_code);
-                $a = intval($a) ;
-                if($a >0) {
-                    $id = $a;
-                }
-
-            }
+        $letters = "ID";
+        $last=0;
+        $sql = "select item_code from  items     order  by  item_id desc  limit 0,100000 ";   //todo  100
+        $list = $conn->GetCol($sql);
+      
+ 
+        foreach($list as $n) {
+           $digits = intval( preg_replace('/[^0-9]/', '', $n) );
+           if($digits > $last) {
+              $last =  $digits ; //максимальная цифра
+           }
         }
+        
+        $last++;
+        $d=5;
+        if( strlen( ''.$last) >$d){ //если не  влазит
+           $d =  strlen( ''.$last); 
+        }
+        $next = $letters . sprintf("%0{$d}d", $last);
 
-        return "ID" . sprintf("%05d", ++$id);
+        return $next;
     }
 
+    /**
+    * проверка  уникальности артикула
+    * возвращает true если  уникальный
+    */
+    public   function checkUniqueArticle( ) {
+        if (\App\System::getOption("common", "nocheckarticle") == 1) {
+            return true; //не проверяем
+        }        
+        if (strlen($this->item_code) ==0 ) {
+            return true;
+        }
+        $code = Item::qstr($this->item_code);
+        $cnt = Item::findCnt("item_id <> {$this->item_id} and  item_code={$code} ");
+        if ($cnt > 0) {
+            return false;
+        }
+
+        return true;             
+    }    
+    
     /**
      * список производителей
      *
@@ -725,7 +790,7 @@ class Item extends \ZCL\DB\Entity
         $res = $conn->Execute($sql);
         $list = array();
         foreach ($res as $v) {
-            if (strlen($v['manufacturer']) > 0) {
+            if (strlen($v['manufacturer'] ?? '') > 0) {
                 if ($nametoindex) {
                     $list[$v['manufacturer']] = $v['manufacturer'];
                 } else {
@@ -765,7 +830,7 @@ class Item extends \ZCL\DB\Entity
 
                 if($iset->item_id > 0) {
                     $it = \App\Entity\Item::load($iset->item_id);
-                    $pr = $it->getLastPartion(0);
+                    $pr = $it->getPartion(0);
                     $price += ($iset->qty * $pr);
                 }
                 if($iset->service_id >0) {
@@ -774,10 +839,12 @@ class Item extends \ZCL\DB\Entity
                 }
             }
         }
-        if ($price == 0) {  //ищем  последнюю  партию
-            $price = $this->getLastPartion(0);
+        if ($price == 0) {   
+            $price = $this->getPartion(0);
         }
-
+        if($price==0) {
+            \App\System::setWarnMsg("Для {$item->itemname} не  вирахувано собївартїсть") ;
+        }
         return $price;
     }
 

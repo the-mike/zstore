@@ -165,7 +165,10 @@ class PayList extends \App\Pages\Base
             $payed = $conn->GetOne($sql);
 
             $conn->Execute("update documents set payed={$payed} where   document_id =" . $pl->document_id);
-
+       
+            $doc = \App\Entity\Doc\Document::load($pl->document_id)->cast();
+            $doc->DoBalans();
+      
             $conn->CommitTrans();
 
 
@@ -188,7 +191,7 @@ class PayList extends \App\Pages\Base
         \App\Entity\Notify::toSystemLog("Користувач {$user->username} видалив платіж з документа {$doc->document_number}. Підстава: " . $sender->notes->getText()) ;
 
         $sender->notes->setText('');
-        $this->setSuccess('Платіж відмінено');
+        $this->setSuccess('Платіж скасовано');
         $this->resetURL();
     }
 
@@ -286,7 +289,7 @@ class PayListDataSource implements \Zippy\Interfaces\DataSource
         $conn = \ZDB\DB::getConnect();
 
         //$where = "   d.customer_id in(select  customer_id from  customers  where  status=0)";
-        $where = " date(paydate) >= " . $conn->DBDate($this->page->filter->from->getDate()) . " and  date(paydate) <= " . $conn->DBDate($this->page->filter->to->getDate());
+        $where = "p.paytype<>1001 and  date(paydate) >= " . $conn->DBDate($this->page->filter->from->getDate()) . " and  date(paydate) <= " . $conn->DBDate($this->page->filter->to->getDate());
 
         //        $where = " paydate>=  ". $conn->DBDate(strtotime("-400 day") );
 
@@ -335,9 +338,7 @@ class PayListDataSource implements \Zippy\Interfaces\DataSource
         $sql = "select  p.*,d.customer_name,d.meta_id,d.document_date  from documents_view  d join paylist_view p on d.document_id = p.document_id where " . $this->getWhere() . " order  by  pl_id desc   ";
         if ($count > 0) {
             $limit =" limit {$start},{$count}";
-            if($conn->dataProvider=="postgres") {
-                $limit =" limit {$count} offset {$start}";
-            }
+        
 
 
             $sql .= $limit;

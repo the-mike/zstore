@@ -29,6 +29,17 @@
                         </select>
 
                     </div>
+                  <div class="form-group   ">
+                        <label for="defmf">Каса за замовчанням</label>
+
+                        <select class="form-control" zippy="defmf">
+                            <option value='0'>Не вказана</option>
+
+                        </select>
+                        <small class="form-text text-muted">Якщо оплата  не  на  стороні IM </small>
+
+                    </div>
+                    
                     <div class="form-check">
                         <input zippy="setpayamount" type="checkbox" class="form-check-input">
                         <label class="form-check-label" for="setpayamount">Ставити статус  До сплати  </label>
@@ -41,11 +52,15 @@
                         <small class="form-text text-muted">Iмпортувати клiєнтiв з IМ в довiдник контрагентiв.</small>
                         <br>
                     </div>
-                                    
+                    <div class="form-check">
+                        <input zippy="ssl" type="checkbox" class="form-check-input">
+                        <label class="form-check-label" for="ssl">Перевiрка SSL сертифiката </label>
+
+                    </div>                                  
                     <div class="form-group">
                         <input type="submit" value="Зберегти" zippy="save" class="btn   btn-primary mr-2"/>
                         
-                        <div id="loader" style="display:none" class="spinner-border spinner-border-sm"></div>
+
 
                     </div>
                 </form>
@@ -55,7 +70,7 @@
 
             function check_check() {
 
-                $('#loader').removeAttr('style');
+                  document.getElementById('dialogwait').showModal()
             }
 
         </script>

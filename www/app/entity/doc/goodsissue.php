@@ -88,8 +88,8 @@ class GoodsIssue extends Document
         $header["edrpou"] = false;
         $header["fedrpou"] = false;
         $header["finn"] = false;
-        $header['isprep'] = $this->headerdata["prepaid"] > 0;
-        $header['prepaid'] = H::fa($this->headerdata["prepaid"]);
+        $header['isprep'] = ($this->headerdata["prepaid"] ??0 )> 0;
+        $header['prepaid'] = H::fa($this->headerdata["prepaid"]??'');
 
         if ($this->customer_id > 0) {
             $cust = \App\Entity\Customer::load($this->customer_id);
@@ -140,7 +140,8 @@ class GoodsIssue extends Document
 
 
         $parts = array();
-        $dd =   doubleval($this->headerdata['bonus']) +  doubleval($this->headerdata['totaldisc'])   ;
+      //  $dd =   doubleval($this->headerdata['bonus']) +  doubleval($this->headerdata['totaldisc'])   ;
+        $dd =    doubleval($this->headerdata['totaldisc'])   ;
         $k = 1;   //учитываем  скидку
         if ($dd > 0 && $this->amount > 0) {
             $k = ($this->amount - $dd) / $this->amount;
@@ -159,6 +160,7 @@ class GoodsIssue extends Document
                 if ($item->autooutcome == 1) {    //комплекты
                     $set = \App\Entity\ItemSet::find("pitem_id=" . $item->item_id);
                     foreach ($set as $part) {
+                        $lost = 0;
 
                         $itemp = \App\Entity\Item::load($part->item_id);
                         if($itemp == null) {
@@ -169,6 +171,12 @@ class GoodsIssue extends Document
                         if (false == $itemp->checkMinus($itemp->quantity, $this->headerdata['store'])) {
                             throw new \Exception("На складі всього ".H::fqty($itemp->getQuantity($this->headerdata['store']))." ТМЦ {$itemp->itemname}. Списання у мінус заборонено");
                         }
+                         //учитываем  отходы
+                        if ($itemp->lost > 0) {
+                            $k = 1 / (1 - $itemp->lost / 100);
+                            $itemp->quantity = $itemp->quantity * $k;
+                            $lost = $k - 1;
+                        }
 
                         $listst = \App\Entity\Stock::pickup($this->headerdata['store'], $itemp);
 
@@ -178,6 +186,18 @@ class GoodsIssue extends Document
                             $sc->tag=Entry::TAG_TOPROD;
 
                             $sc->save();
+ 
+                            if ($lost > 0) {
+                                $io = new \App\Entity\IOState();
+                                $io->document_id = $this->document_id;
+                                $io->amount = 0 - $st->quantity * $st->partion * $lost;
+                                $io->iotype = \App\Entity\IOState::TYPE_TRASH;
+
+                                $io->save();
+
+                            }    
+                            
+                            
                         }
                     }
                 }
@@ -218,13 +238,11 @@ class GoodsIssue extends Document
 
 
 
-        $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->headerdata['payed'], $this->headerdata['payment']);
-        if ($payed > 0) {
-            $this->payed = $payed;
-        }
+        $this->payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->headerdata['payed'], $this->headerdata['payment']);
+ 
         \App\Entity\IOState::addIOState($this->document_id, $this->headerdata['payed'], \App\Entity\IOState::TYPE_BASE_INCOME);
 
-
+        $this->DoBalans() ;
 
 
         return true;
@@ -267,7 +285,7 @@ class GoodsIssue extends Document
 
         $printer = System::getOptions('printer');
         $style = "";
-        if (strlen($printer['pdocfontsize']) > 0 || strlen($printer['pdocwidth']) > 0) {
+        if (strlen($printer['pdocfontsize']??'') > 0 || strlen($printer['pdocwidth']??'') > 0) {
             $style = 'style="font-size:' . $printer['pdocfontsize'] . 'px;width:' . $printer['pdocwidth'] . ';"';
 
         }
@@ -324,5 +342,33 @@ class GoodsIssue extends Document
 
 
     }
-
+    /**
+    * @override
+    */
+    public function DoBalans() {
+        $conn = \ZDB\DB::getConnect();
+        $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
+  
+        //тмц
+        if($this->payamount >0) {
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = 0-$this->payamount;
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+        
+       //платежи       
+        foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where    paytype < 1000 and coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = $p['amount'];
+            $b->createdon = strtotime($p['paydate']);
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }        
+    }
+    
 }

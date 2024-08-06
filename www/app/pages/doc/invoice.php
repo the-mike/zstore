@@ -33,6 +33,10 @@ class Invoice extends \App\Pages\Base
     private $_rowid     = 0;
 
 
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
@@ -478,19 +482,16 @@ class Invoice extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }
-
-
+ 
     public function onTotaldisc($sender) {
         $this->docform->totaldisc->setText(H::fa($this->docform->edittotaldisc->getText()));
         $this->calcPay() ;
     }
-
-
-
+  
     /**
      * Расчет  итого
      *
@@ -500,17 +501,13 @@ class Invoice extends \App\Pages\Base
         $total = 0;
 
         foreach ($this->_itemlist as $item) {
-            $item->amount = $item->price * $item->quantity;
+            $item->amount = H::fa($item->price * $item->quantity);
 
             $total = $total + $item->amount;
         }
 
         $this->docform->total->setText(H::fa($total));
-
-
-
-
-
+ 
     }
 
     private function calcPay() {
@@ -568,7 +565,7 @@ class Invoice extends \App\Pages\Base
         $item = Item::load($id);
 
         $this->editdetail->qtystock->setText(H::fqty($item->getQuantity($this->docform->store->getValue())));
-        $price = $item->getLastPartion();
+        $price = $item->getLastPartion(0, "", false);
         $this->editdetail->pricestock->setText(H::fa($price));
 
         $store_id = $this->docform->store->getValue();
@@ -635,8 +632,8 @@ class Invoice extends \App\Pages\Base
     }
 
     public function OnAutoItem($sender) {
-        $text = Item::qstr('%' . $sender->getText() . '%');
-        return Item::findArray("itemname", "  (itemname like {$text} or item_code like {$text})  and disabled <> 1 ");
+        $text = trim($sender->getText());
+        return Item::findArrayAC($text);
     }
 
     //добавление нового контрагента

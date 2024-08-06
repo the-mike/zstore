@@ -38,6 +38,10 @@ class GoodsReceipt extends \App\Pages\Base
     public $_sllist     = [];
     private $_rownumber = 1;
 
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
@@ -57,13 +61,22 @@ class GoodsReceipt extends \App\Pages\Base
         $this->docform->customer->onChange($this, 'OnCustomerFirm');
         $this->docform->add(new DropDownChoice('firm', \App\Entity\Firm::getList(), H::getDefFirm()))->onChange($this, 'OnCustomerFirm');
         $this->docform->add(new DropDownChoice('contract', array(), 0))->setVisible(false);
+        $this->docform->add(new CheckBox('comission', 0));
 
         $this->docform->add(new DropDownChoice('store', Store::getList(), H::getDefStore()));
         $this->docform->add(new TextInput('notes'));
         $this->docform->add(new TextInput('outnumber'));
         $this->docform->add(new TextInput('basedoc'));
         $this->docform->add(new CheckBox('spreaddelivery'));
-
+        $this->docform->add(new CheckBox('baydelivery'));
+        if($common['spreaddelivery'] ==1) {
+            $this->docform->spreaddelivery->setChecked(1)  ;
+        }
+        if($common['baydelivery'] ==1) {
+            $this->docform->baydelivery->setChecked(1)  ;
+        }
+        
+        
         $this->docform->add(new TextInput('barcode'));
         $this->docform->add(new SubmitLink('addcode'))->onClick($this, 'addcodeOnClick');
 
@@ -73,6 +86,7 @@ class GoodsReceipt extends \App\Pages\Base
         $this->docform->add(new DropDownChoice('val', H::getValList(), '0'))->onChange($this, 'OnVal');
 
         $this->docform->add(new SubmitLink('addcust'))->onClick($this, 'addcustOnClick');
+        $this->docform->addcust->setVisible(       \App\ACL::checkEditRef('CustomerList',false));
 
         $this->docform->add(new SubmitLink('addrow'))->onClick($this, 'addrowOnClick');
         $this->docform->add(new Button('backtolist'))->onClick($this, 'backtolistOnClick');
@@ -104,6 +118,8 @@ class GoodsReceipt extends \App\Pages\Base
         $this->editdetail->add(new AutocompleteTextInput('edititem'))->onText($this, 'OnAutoItem');
         $this->editdetail->edititem->onChange($this, 'OnChangeItem', true);
         $this->editdetail->add(new SubmitLink('addnewitem'))->onClick($this, 'addnewitemOnClick');
+        $this->editdetail->addnewitem->setVisible(       \App\ACL::checkEditRef('ItemList',false));
+  
         $this->editdetail->add(new TextInput('editquantity'))->setText("1");
         $this->editdetail->add(new TextInput('editprice'));
         $this->editdetail->add(new TextInput('editsellprice'));
@@ -152,13 +168,14 @@ class GoodsReceipt extends \App\Pages\Base
 
         $this->docform->add(new ClickLink('opensn', $this, "onOpensn"));
 
-
+ 
         if ($docid > 0) {    //загружаем   содержимое  документа настраницу
             $this->_doc = Document::load($docid)->cast();
             $this->docform->document_number->setText($this->_doc->document_number);
 
             $this->docform->notes->setText($this->_doc->notes);
             $this->docform->spreaddelivery->setChecked($this->_doc->headerdata['spreaddelivery']);
+            $this->docform->baydelivery->setChecked($this->_doc->headerdata['baydelivery']);
             $this->docform->basedoc->setText($this->_doc->basedoc);
             $this->docform->document_date->setDate($this->_doc->document_date);
             $this->docform->customer->setKey($this->_doc->customer_id);
@@ -173,16 +190,11 @@ class GoodsReceipt extends \App\Pages\Base
             $this->docform->delivery->setText(H::fa($this->_doc->headerdata['delivery']));
             $this->docform->editdelivery->setText(H::fa($this->_doc->headerdata['delivery']));
 
-            if ($this->_doc->headerdata['payed'] > 0) {
-                $this->_doc->payed = $this->_doc->headerdata['payed'];
-            }
-            if ($this->_doc->headerdata['payamount'] > 0) {
-                $this->_doc->payamount = $this->_doc->headerdata['payamount'];
-            }
-            $this->docform->editpayed->setText(H::fa($this->_doc->payed));
-            $this->docform->payed->setText(H::fa($this->_doc->payed));
-            $this->docform->payamount->setText(H::fa($this->_doc->payamount));
-            $this->docform->editpayamount->setText(H::fa($this->_doc->payamount));
+ 
+            $this->docform->editpayed->setText(H::fa($this->_doc->headerdata['payed']));
+            $this->docform->payed->setText(H::fa($this->_doc->headerdata['payed']));
+            $this->docform->payamount->setText(H::fa($this->_doc->headerdata['payamount']));
+            $this->docform->editpayamount->setText(H::fa($this->_doc->headerdata['payamount']));
 
             $this->docform->store->setValue($this->_doc->headerdata['store']);
             $this->docform->payment->setValue($this->_doc->headerdata['payment']);
@@ -190,6 +202,7 @@ class GoodsReceipt extends \App\Pages\Base
             $this->OnCustomerFirm($this->docform->customer);
 
             $this->docform->contract->setValue($this->_doc->headerdata['contract_id']);
+            $this->docform->comission->setChecked($this->_doc->headerdata['comission']);
 
 
             $this->docform->total->setText($this->_doc->amount);
@@ -222,7 +235,7 @@ class GoodsReceipt extends \App\Pages\Base
                         $this->docform->customer->setText($basedoc->customer_name);
                         $this->docform->val->setValue(0);
                         $this->docform->rate->setText(1);
-
+                        $this->_doc->headerdata['prepaid']  = $basedoc->payed ;
                         $this->docform->basedoc->setText($basedoc->document_number);
 
                     }
@@ -300,6 +313,9 @@ class GoodsReceipt extends \App\Pages\Base
 
         $this->OnVal($this->docform->val);
 
+        if ($docid > 0) { 
+             $this->docform->rate->setText($this->_doc->headerdata['rate']);
+        }
 
         if (false == \App\ACL::checkShowDoc($this->_doc)) {
             return;
@@ -396,7 +412,7 @@ class GoodsReceipt extends \App\Pages\Base
             $this->editdetail->edititem->setKey($item->item_id);
             $this->editdetail->edititem->setText($item->itemname);
             
-            $price = $item->getLastPartion($this->docform->store->getValue(), null, false);
+            $price = $item->getLastPartion($this->docform->store->getValue(), "", true);
             
             $this->editdetail->editprice->setText(H::fa($price));
             $this->editdetail->editsellprice->setText(H::fa($item->price1));
@@ -452,6 +468,7 @@ class GoodsReceipt extends \App\Pages\Base
     }
 
     public function savesnOnClick($sender) {
+        $common = System::getOptions("common");
 
         $id = $this->editsnitem->editsnitemname->getKey();
         $name = trim($this->editsnitem->editsnitemname->getText());
@@ -469,6 +486,7 @@ class GoodsReceipt extends \App\Pages\Base
 
         $list = [];
         foreach(explode("\n", $sns) as $s) {
+            $s = trim($s);
             if(strlen($s) > 0) {
                 $list[] = $s;
             }
@@ -478,6 +496,19 @@ class GoodsReceipt extends \App\Pages\Base
             $this->setError("Не вказані серійні номери");
             return;
         }
+        
+        
+        if($common['usesnumber'] == 3 ){
+            
+            $temp_array = array_unique($list);
+            if(sizeof($temp_array) < sizeof($list)) {
+                $this->setError("Cерійний номер має бути унікальним для виробу");    
+                return;
+            }           
+            
+        }        
+        
+        
         $next = count($this->_itemlist) > 0 ? max(array_keys($this->_itemlist)) : 0;
 
         foreach($list as $s) {
@@ -503,6 +534,7 @@ class GoodsReceipt extends \App\Pages\Base
 
 
     }
+  
     public function saverowOnClick($sender) {
         $common = System::getOptions("common");
 
@@ -549,12 +581,16 @@ class GoodsReceipt extends \App\Pages\Base
             if (strlen($item->snumber) == 0 && $item->useserial == 1  ) {
                 if($common['usesnumber'] != 3){
                    $this->setError("Потрібна партія виробника");
+                   return;
                 }
                 if($common['usesnumber'] == 3 && $item->quantity <> 1){
-                   $this->setError("Cерійний номер має бути для одного виробу");    
+                   $this->setError("Cерійний номер має бути унікальним для виробу");    
+                   return;
                 }  
-                
+                $this->setError("Не введено серійний номер");    
                 return;
+                
+                
             }
         }
         if($common['usesnumber'] == 2) {
@@ -567,10 +603,11 @@ class GoodsReceipt extends \App\Pages\Base
             }
            
         }
-         if($common['usesnumber'] == 3  ) {           
+     
+        if($common['usesnumber'] == 3  ) {           
 
             foreach(  $this->_itemlist as $i){
-                if( $this->_rowid == -1 && $item->snumber==$i->snumber )  {
+                if( $this->_rowid == -1 && strlen($item->snumber) > 0 && $item->snumber==$i->snumber )  {
                     $this->setError('Вже є ТМЦ  з таким серійним номером');
                     return;
                     
@@ -636,6 +673,7 @@ class GoodsReceipt extends \App\Pages\Base
 
         $this->_doc->headerdata['store'] = $this->docform->store->getValue();
         $this->_doc->headerdata['spreaddelivery'] = $this->docform->spreaddelivery->isChecked() ? 1 : 0;
+        $this->_doc->headerdata['baydelivery'] = $this->docform->baydelivery->isChecked() ? 1 : 0;
         $this->_doc->headerdata['storename'] = $this->docform->store->getValueName();
         $this->_doc->headerdata['payment'] = $this->docform->payment->getValue();
         $this->_doc->headerdata['val'] = $this->docform->val->getValue();
@@ -646,10 +684,11 @@ class GoodsReceipt extends \App\Pages\Base
         $this->_doc->headerdata['delivery'] = $this->docform->delivery->getText();
         $this->_doc->headerdata['outnumber'] = $this->docform->outnumber->getText();
         $this->_doc->headerdata['basedoc'] = $this->docform->basedoc->getText();
+        $this->_doc->headerdata['comission'] = $this->docform->comission->isChecked() ? 1:0;
 
 
         $this->_doc->payamount = $this->docform->payamount->getText();
-        $this->_doc->headerdata['payamount'] = $this->docform->payamount->getText();
+        $this->_doc->headerdata['payamount'] = $this->_doc->payamount;
 
         $this->_doc->payed = $this->docform->payed->getText();
         $this->_doc->headerdata['payed'] = $this->docform->payed->getText();
@@ -694,9 +733,10 @@ class GoodsReceipt extends \App\Pages\Base
                 $this->_doc->updateStatus(Document::STATE_EXECUTED);
 
 
-
-                if(($this->_doc->headerdata['payamount'] - doubleval($this->_doc->headerdata['prepaid']))> $this->_doc->headerdata['payed']) {
-                    $this->_doc->updateStatus(Document::STATE_WP);
+                if($this->_doc->headerdata['comission'] != 1) {
+                    if(( H::fa( $this->_doc->headerdata['payamount']) - H::fa(doubleval($this->_doc->headerdata['prepaid']))  )> H::fa( $this->_doc->headerdata['payed'] ) ) {
+                        $this->_doc->updateStatus(Document::STATE_WP);
+                    }
                 }
 
                 if ($this->_doc->parent_id > 0) {   //закрываем заказ
@@ -735,8 +775,8 @@ class GoodsReceipt extends \App\Pages\Base
                 }
             }
 
-            //если  выполнен и оплачен
-            if ($this->_doc->state == Document::STATE_EXECUTED && $this->_doc->payment > 0 && $this->_doc->payed == $this->_doc->payment) {
+            //если  накладная  выполнена  и оплачена
+            if ($this->_doc->state == Document::STATE_EXECUTED ) {
                 $orders = $this->_doc->getChildren('OrderCust');
                 foreach ($orders as $order) {
                     if ($order->state == Document::STATE_INPROCESS) {
@@ -755,7 +795,7 @@ class GoodsReceipt extends \App\Pages\Base
                 $this->_doc->document_id = 0;
             }
             $this->setError($ee->getMessage());
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
 
             return;
         }
@@ -828,8 +868,13 @@ class GoodsReceipt extends \App\Pages\Base
         $delivery = doubleval($this->docform->delivery->getText());
         $nds = doubleval($this->docform->nds->getText()) ;
 
-        $total = $total + $nds - $disc  ;
-        $total +=  $delivery;
+        $total = doubleval($total) + $nds - doubleval($disc)  ;
+        
+        if($this->docform->baydelivery->isChecked() ==false) {
+           $total +=  $delivery;    //если патит  поставщик
+        }
+        
+        
 
         $this->docform->editpayamount->setText(H::fa($total));
         $this->docform->payamount->setText(H::fa($total));
@@ -877,14 +922,19 @@ class GoodsReceipt extends \App\Pages\Base
         $val = $this->docform->val->getValue();
         if (strlen($val) > 1) {
             if($this->_doc->payamount  > $this->_doc->payed) {
-                $this->setError("Кредит із валютою не дозволено");
-
-
+                $this->setError("Якщо валюта має бути вказана оплата");
                 return;
             }
 
-
+        } 
+        
+        if ($this->_doc->headerdata['comission']==1 && $this->_doc->headerdata['val'] != "0") {
+            $this->setError("Не можна валюту і комісію ");
         }
+        if ($this->_doc->headerdata['comission']==1 && $this->_doc->payed > 0) {
+            $this->setError("Оплата не  вноситься якщо Комісія ");
+        }
+        
         return !$this->isError();
     }
 
@@ -933,6 +983,7 @@ class GoodsReceipt extends \App\Pages\Base
         }
 
         $this->editnewitem->editnewmanufacturer->setDataList(Item::getManufacturers());
+        $this->editnewitem->editnewitemcode->setText( Item::getNextArticle());
 
     }
 
@@ -948,15 +999,14 @@ class GoodsReceipt extends \App\Pages\Base
         $item->msr = $this->editnewitem->editnewmsr->getText();
         $item->bar_code = $this->editnewitem->editnewitembarcode->getText();
 
-        if (strlen($item->item_code) > 0 && System::getOption("common", "nocheckarticle") != 1) {
-            $code = Item::qstr($item->item_code);
-            $cnt = Item::findCnt("  item_code={$code} ");
-            if ($cnt > 0) {
-                $this->setError('Такий артикул вже існує');
-                return;
-            }
+        if ($item->checkUniqueArticle()==false) {
+              $this->setError('Такий артикул вже існує');
+              return;
+        }  
 
-        }
+      
+
+
         if (strlen($item->bar_code) > 0) {
             $code = Item::qstr($item->bar_code);
             $cnt = Item::findCnt("  bar_code={$code} ");
@@ -965,10 +1015,6 @@ class GoodsReceipt extends \App\Pages\Base
                 return;
             }
 
-        }
-        if (strlen($item->item_code) == 0 &&  System::getOption("common", "autoarticle") == 1) {
-
-            $item->item_code = Item::getNextArticle();
         }
 
 
@@ -1053,14 +1099,14 @@ class GoodsReceipt extends \App\Pages\Base
         $item = Item::load($item_id);
 
         if($price==null) {
-            $price = $item->getLastPartion($this->docform->store->getValue(), null, false);
+        //    $price = $item->getLastPartion($this->docform->store->getValue(), "", true);
 
         }
         $this->editsnitem->editsnprice->setText(H::fa($price));
 
         $this->editdetail->editprice->setText(H::fa($price));
-        $this->editdetail->editsellprice->setText(H::fa($item->price1));
-        $this->editdetail->editsellprice2->setText(H::fa($item->price2));
+        $this->editdetail->editsellprice->setText($item->price1);
+        $this->editdetail->editsellprice2->setText($item->price2);
     }
 
     public function OnCustomerFirm($sender) {
@@ -1081,7 +1127,7 @@ class GoodsReceipt extends \App\Pages\Base
     public function OnChangeItem($sender) {
         $id = $sender->getKey();
         $item = Item::load($id);
-        $price = $item->getLastPartion($this->docform->store->getValue(), null, false);
+        $price = $item->getLastPartion($this->docform->store->getValue(), "", true);
         $this->editdetail->editprice->setText(H::fa($price));
         $this->editdetail->editsellprice->setText($item->price1);
         $this->editdetail->editsellprice2->setText($item->price2);

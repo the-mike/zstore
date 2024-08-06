@@ -21,6 +21,7 @@ use Zippy\Html\Form\SubmitButton;
 use Zippy\Html\Form\TextArea;
 use Zippy\Html\Form\TextInput;
 use Zippy\Html\Form\CheckBox;
+use Zippy\Html\Form\RadioButton;
 use Zippy\Html\Label;
 use Zippy\Html\Panel;
 use Zippy\Html\Link\ClickLink;
@@ -33,6 +34,7 @@ class ARMPos extends \App\Pages\Base
 {
     public $_itemlist   = array();
     public $_serlist    = array();
+    public $_paytype    = 0;
     private $pos;
     private $_doc        = null;
     private $_rowid      = 0;
@@ -42,15 +44,21 @@ class ARMPos extends \App\Pages\Base
     private $_mfbeznal = 0;
     private $_mfnal = 0;
     private $_editrow =false;
+    private $_docid =0;
+    private $_basedocid =0;
 
     public $_doclist = array();
 
-    public function __construct() {
+    public function __construct($docid=0,$basedocid=0) {
         parent::__construct();
 
         if (false == \App\ACL::checkShowSer('ARMPos')) {
             return;
         }
+        
+        $this->_docid = $docid;
+        $this->_basedocid = $basedocid;
+        
         $filter = \App\Filter::getFilter("armpos");
         if ($filter->isEmpty()) {
             $filter->pos = 0;
@@ -108,6 +116,10 @@ class ARMPos extends \App\Pages\Base
         //  ввод товаров
 
         $this->docpanel->form2->add(new SubmitButton('tosave'))->onClick($this, 'tosaveOnClick');
+        $this->docpanel->form2->add(new SubmitButton('topass'))->onClick($this, 'tosaveOnClick');
+        $this->docpanel->form2->add(new Button('frompass'))->onClick($this, 'fromPass');
+        
+        $this->docpanel->form2->add(new Button('tocancel'))->onClick($this, 'newdoc');
         $this->docpanel->form2->add(new SubmitButton('topay'))->onClick($this, 'topayOnClick');
         $this->docpanel->form2->add(new TextInput('barcode'));
         $this->docpanel->form2->add(new SubmitLink('addcode'))->onClick($this, 'addcodeOnClick');
@@ -122,15 +134,25 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->form2->add(new AutocompleteTextInput('customer'))->onText($this, 'OnAutoCustomer');
         $this->docpanel->form2->customer->onChange($this, 'OnChangeCustomer');
 
-        $this->docpanel->form2->add(new DropDownChoice('paytype', array()));
+        $this->docpanel->form2->add(new TextInput('promocode'));
+        $this->docpanel->form2->promocode->setVisible(\App\Entity\PromoCode::findCnt('') > 0);
+
+
+        $bind = new  \Zippy\Binding\PropertyBinding($this, '_paytype');
+ 
+        $this->docpanel->form2->add(new RadioButton('pt1',$bind,1));
+        $this->docpanel->form2->add(new RadioButton('pt2',$bind,2));
+        $this->docpanel->form2->add(new RadioButton('pt3',$bind,3));
+        
         $this->docpanel->form2->add(new SubmitLink('addcust'))->onClick($this, 'addcustOnClick');
         $this->docpanel->form2->add(new Label('custinfo'))->setVisible(false);
         $this->docpanel->form2->add(new \Zippy\Html\Link\BookmarkableLink('cinfo'))->setVisible(false);
 
 
         $this->docpanel->form2->add(new AutocompleteTextInput('addtovarsm'))->onText($this, 'OnAutoItemSm');
-        $this->docpanel->form2->addtovarsm->onChange($this, 'OnChangeItemSm', true);
+        $this->docpanel->form2->addtovarsm->onChange($this, 'OnChangeItemSm',true);
         $this->docpanel->form2->add(new TextInput('qtysm'));
+        $this->docpanel->form2->add(new Label('storeqtysm'));
         $this->docpanel->form2->add(new SubmitLink('additemsm'))->onClick($this, 'addItemSmOnClick');
         $this->docpanel->form2->add(new TextInput('bonus'));
         $this->docpanel->form2->add(new TextInput('totaldisc'));
@@ -177,18 +199,15 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->editdetail->edittovar->onChange($this, 'OnChangeItem', true);
 
         $this->docpanel->editdetail->add(new Label('qtystock'));
+        $this->docpanel->editdetail->add(new Label('qtystockex'));
         $this->docpanel->editdetail->add(new ClickLink('openitemsel', $this, 'onOpenItemSel'));
         $this->docpanel->editdetail->add(new ClickLink('opencatpan', $this, 'onOpenCatPan'));
-
-
-
+ 
         $this->docpanel->editdetail->add(new Button('cancelrow'))->onClick($this, 'cancelrowOnClick');
         $this->docpanel->editdetail->add(new SubmitButton('submitrow'))->onClick($this, 'saverowOnClick');
 
         $this->docpanel->add(new \App\Widgets\ItemSel('wselitem', $this, 'onSelectItem'))->setVisible(false);
-
-
-
+ 
 
         $this->docpanel->add(new Form('editserdetail'))->setVisible(false);
         $this->docpanel->editserdetail->add(new TextInput('editserquantity'))->setText("1");
@@ -220,18 +239,26 @@ class ARMPos extends \App\Pages\Base
         if($common['usesnumber'] ==2) {
             $this->_tvars["colspan"] = 8;
         }
+         
+        if(H::getKeyVal('issimple_'.System::getUser()->user_id)=="tosimple"){
+           $this->onModeOn($this->docpanel->navbar->tosimple); 
+        }
+        
     }
 
     public function onModeOn($sender) {
         $this->_tvars['simplemode']  = $sender->id == 'tosimple';
         if($this->_tvars['simplemode'] == true) {
             $this->_tvars['usesnumber']  = false;
+            $this->docpanel->form2->qtysm->setText("");
+            $this->docpanel->form2->storeqtysm->setText("");
+            
         } else {
             $options = System::getOptions('common');
             $this->_tvars["usesnumber"] = $options['usesnumber'] == 1;
 
         }
-
+        H::setKeyVal('issimple_'.System::getUser()->user_id,$sender->id);
     }
 
     public function onCheckList($sender) {
@@ -253,6 +280,7 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->form2->setVisible(true);
         $this->docpanel->form3->setVisible(false);
         $this->_editrow =  false;
+        $this->_paytype=0;
     }
 
     public function cancel3docOnClick($sender) {
@@ -290,9 +318,12 @@ class ARMPos extends \App\Pages\Base
             return;
         }
 
+
         if($this->pos->usefisc != 1) {
             $this->_tvars['fiscal']  = false;
         }
+ 
+        $this->_tvars['fiscaltestmode']  = $this->pos->testing==1;
 
         $filter = \App\Filter::getFilter("armpos");
 
@@ -309,21 +340,10 @@ class ARMPos extends \App\Pages\Base
         $this->form1->setVisible(false);
         $this->docpanel->form2->setVisible(true);
 
-        if($filter->mfbeznal==0) {
-
-            $this->docpanel->form2->paytype->setOptionList(array( "1"=>"Готівка" ));
-            $this->docpanel->form2->paytype->setValue(1);
-        } else {
-            $this->docpanel->form2->paytype->setOptionList(array(
-              "0"=>"Не  обрано",
-              "1"=>"Готівка",
-              "2"=>"Картка",
-              "3"=>"Комбінована"
-            ));
-            $this->docpanel->form2->paytype->setValue(0);
-
-
-        }
+        
+        $this->_tvars['onlynal']  = $filter->mfbeznal==0;
+        
+ 
 
 
         $this->newdoc(null);
@@ -346,6 +366,8 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->form3->document_date->setDate(time());
         $this->_doc = \App\Entity\Doc\Document::create('POSCheck');
         $this->_doc->headerdata['arm'] = 1;
+        $this->_doc->headerdata['time'] = time();
+        
         $this->docpanel->form3->document_number->setText($this->_doc->nextNumber());
 
 
@@ -354,7 +376,10 @@ class ARMPos extends \App\Pages\Base
 
         $this->docpanel->form2->bonus->setText('0');
         $this->docpanel->form2->totaldisc->setText('0');
+        $this->docpanel->form2->promocode->setText('');
 
+ 
+        
         $this->docpanel->form3->payamount->setText('0');
         $this->docpanel->form3->payed->setText('0');
         $this->docpanel->form3->payedcard->setText('0');
@@ -369,13 +394,44 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->form2->addcust->setVisible(true) ;
         $this->docpanel->form2->cinfo->setVisible(false) ;
 
-        $l=  $this->docpanel->form2->paytype->getOptionList();
-        if(count($l) >1) {
-            $this->docpanel->form2->paytype->setValue(0);
+        $this->_paytype=0;
+
+        
+        if($this->_docid >0) { //загрузка  чека
+            
+            $doc = Document::load($this->_docid);
+            $this->loadDoc($doc);
+           
+            $this->_docid = 0;
         }
+        if($this->_basedocid >0) { //на основании
+            
+            $bd = Document::load($this->_basedocid) ;
+            $this->docpanel->form2->bonus->setText($bd->headerdata['bonus']);
+            $this->docpanel->form2->totaldisc->setText($bd->headerdata['totaldisc']);
+            $this->_doc->parent_id=$this->_basedocid;
+   
+            $this->docpanel->form2->customer->setKey($bd->customer_id);
+            $this->docpanel->form2->customer->setText($bd->customer_name);
+            if($bd->meta_name=='ServiceAct') {
+                $this->_itemlist = $bd->unpackDetails('detail2data');
+                $this->_serlist =  $bd->unpackDetails('detaildata');
+            }
+            if($bd->meta_name=='Order') {
+                $this->_itemlist = $bd->unpackDetails('detaildata');
+            }
+
+            $this->docpanel->form2->detail->Reload();
+            $this->docpanel->form2->detailser->Reload();
+            $this->calcTotal();          
+          
+            $this->_basedocid = 0;
+        }
+        
 
     }
 
+    //к  оплате      
     public function topayOnClick($sender) {
         if (count($this->_itemlist) == 0 && count($this->_serlist) == 0) {
             $this->setError('Не введено позиції');
@@ -389,9 +445,11 @@ class ARMPos extends \App\Pages\Base
 
         $payamount = $total - $bonus - $totaldisc - $prepaid;
 
-        $paytype=$this->docpanel->form2->paytype->getValue();
+        if($this->_tvars['onlynal']==true) {
+            $this->_paytype=1;
+        }
 
-        if($paytype==0 && $payamount > 0) {
+        if(($this->_paytype==0 || $this->_paytype=='') && $payamount > 0) {
             $this->setError('Не вказаний тип оплати');
             return;
 
@@ -401,13 +459,14 @@ class ARMPos extends \App\Pages\Base
         }
 
 
-        $this->docpanel->form3->paytypeh->setValue($paytype);
+        $this->docpanel->form3->paytypeh->setText($this->_paytype);
 
         $this->form1->setVisible(false);
         $this->docpanel->form2->setVisible(false);
         $this->docpanel->form3->setVisible(true);
 
         $this->docpanel->form3->exch2b->setText('');
+        $this->docpanel->form3->exchange->setText('');
 
         //к  оплате
 
@@ -422,18 +481,18 @@ class ARMPos extends \App\Pages\Base
             $this->docpanel->form3->payed->setAttribute('disabled', null);
             $this->docpanel->form3->payedcard->setAttribute('disabled', null);
 
-            if($paytype == 1) {
+            if($this->_paytype == 1) {
                 $this->docpanel->form3->payed->setText($payamount);
                 $this->docpanel->form3->payedcard->setAttribute('disabled', 'disabled');
                 $this->docpanel->form3->payedcard->setText(0);
             }
-            if($paytype == 2) {
+            if($this->_paytype == 2) {
                 $this->docpanel->form3->payedcard->setText($payamount);
                 $this->docpanel->form3->payed->setAttribute('disabled', 'disabled');
                 $this->docpanel->form3->payed->setText(0);
 
             }
-            if($paytype == 3) {
+            if($this->_paytype == 3) {
                 $half= H::fa($payamount/2);
                 $this->docpanel->form3->payed->setText($half);
                 $this->docpanel->form3->payedcard->setText($payamount - $half);
@@ -451,7 +510,19 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->form3->exchange->setVisible(!$hidep);
         $this->docpanel->form3->exch2b->setVisible(!$hidep);
 
+        
+        $bonus = intval($this->docpanel->form2->bonus->getText());
+        $customer_id = $this->docpanel->form2->customer->getKey();
+        
+        if ($bonus >0 && $customer_id > 0) {
+            $c = Customer::load($customer_id) ;
+            $b=$c->getBonus();
+            if($bonus> $b) {
+                $this->setWarn("У  контрагента  вього {$b} бонусів на рахунку");                
+            }
 
+           
+        }
 
 
     }
@@ -470,7 +541,7 @@ class ARMPos extends \App\Pages\Base
         $row->add(new Label('disc', H::fa($item->disc)));
         $row->add(new Label('price', H::fa($item->price)));
 
-        $row->add(new Label('amount', H::fa($item->quantity * $item->price)));
+        $row->add(new Label('amount', H::fa(floatval($item->quantity) * floatval($item->price)  )));
         $row->add(new ClickLink('delete'))->onClick($this, 'deleteOnClick');
         $row->add(new ClickLink('edit'))->onClick($this, 'editOnClick');
 
@@ -503,17 +574,16 @@ class ARMPos extends \App\Pages\Base
 
 
         $code_ = Item::qstr($code);
-        $code0 = Item::qstr($code0);
-        $item = Item::getFirst(" item_id in(select item_id from store_stock where store_id={$store}) and  (item_code = {$code_} or bar_code = {$code_} or item_code = {$code0} or bar_code = {$code0}  )");
-
+        $item = Item::getFirst("  (item_code = {$code_} or bar_code = {$code_})");
+      
         if ($item == null) {
-            $this->setError("Товар з кодом `{$code}` не знайдено");
+            $this->setWarn("Товар з кодом `{$code}` не знайдено");
             return;
         }
 
         $qty = $item->getQuantity($store);
         if ($qty <= 0) {
-            $this->setError("Товару {$item->itemname} немає на складі");
+            $this->setWarn("Товару {$item->itemname} немає на складі");
         }
 
         foreach ($this->_itemlist as $ri => $_item) {
@@ -585,8 +655,10 @@ class ARMPos extends \App\Pages\Base
 
         $store = $this->form1->store->getValue();
         $qty = $tovar->getQuantity($store);
+        $qtyex = $tovar->getQuantity() - $qty;
 
         $this->docpanel->editdetail->qtystock->setText(H::fqty($qty));
+        $this->docpanel->editdetail->qtystockex->setText(H::fqty($qtyex));
 
         $this->docpanel->form2->setVisible(false);
 
@@ -634,6 +706,7 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->editdetail->editquantity->setText("1");
         $this->docpanel->editdetail->editprice->setText("0");
         $this->docpanel->editdetail->qtystock->setText("");
+        $this->docpanel->editdetail->qtystockex->setText("");
         $this->docpanel->form2->setVisible(false);
         $this->_rowid = -1;
         $this->docpanel->navbar->setVisible(false);
@@ -663,7 +736,12 @@ class ARMPos extends \App\Pages\Base
         $item = Item::load($id);
 
 
-        $item->quantity = $this->docpanel->editdetail->editquantity->getText();
+        $item->quantity = doubleval($this->docpanel->editdetail->editquantity->getText());
+        if ($item->quantity == 0) {
+            $this->setError("Не введена  кількість");
+            return;
+        }
+        
         $item->snumber = $this->docpanel->editdetail->editserial->getText();
 
         $qstock = $item->getQuantity($store);
@@ -726,7 +804,7 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->editdetail->editquantity->setText("1");
 
         $this->docpanel->editdetail->editprice->setText("");
-        $this->docpanel->editdetail->qtystock->setText("");
+        $this->docpanel->editdetail->qtystockex->setText("");
 
         if($this->_editrow) {
             $this->docpanel->editdetail->setVisible(false);
@@ -749,7 +827,12 @@ class ARMPos extends \App\Pages\Base
 
         $ser = Service::load($id);
 
-        $ser->quantity = $this->docpanel->editserdetail->editserquantity->getText();
+        $ser->quantity = doubleval( $this->docpanel->editserdetail->editserquantity->getText());
+        if ($item->quantity == 0) {
+            $this->setError("Не введена  кількість");
+            return;
+        }
+        
         $ser->pureprice = $ser->getPurePrice();
 
         $ser->price = H::fa($this->docpanel->editserdetail->editserprice->getText());
@@ -795,7 +878,7 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->editdetail->editquantity->setText("1");
 
         $this->docpanel->editdetail->editprice->setText("");
-        $this->docpanel->editdetail->qtystock->setText("");
+        $this->docpanel->editdetail->qtystockex->setText("");
         $this->docpanel->navbar->setVisible(true);
 
     }
@@ -821,13 +904,13 @@ class ARMPos extends \App\Pages\Base
         $this->OnChangeItem($this->docpanel->editdetail->edittovar);
     }
 
-    private function calcTotal() {
+    private function _calcTotal() {
 
         $total = 0;
         $disc = 0;
 
         foreach ($this->_itemlist as $item) {
-            $item->amount = $item->price * $item->quantity;
+            $item->amount = H::fa($item->price * $item->quantity);
             if($item->disc >0) {
                 //  $disc += ($item->quantity * ($item->pureprice - $item->price) );
             }
@@ -835,17 +918,37 @@ class ARMPos extends \App\Pages\Base
             $total = $total + $item->amount;
         }
         foreach ($this->_serlist as $item) {
-            $item->amount = $item->price * $item->quantity;
+            $item->amount = H::fa($item->price * $item->quantity);
             if($item->disc >0) {
                 // $disc += ($item->quantity * ($item->pureprice - $item->price) );
             }
 
             $total = $total + $item->amount;
         }
+    
+
+        return $total;
+
+    }
+ 
+    private function calcTotal() {
+
+        $total = $this->_calcTotal();
+        
+        $code= trim($this->docpanel->form2->promocode->getText());
+        if($code != '') {
+            $r = \App\Entity\PromoCode::check($code,$this->docpanel->form2->customer->getKey())  ;
+            if($r == ''){
+                $p = \App\Entity\PromoCode::findByCode($code);
+                $disc = doubleval($p->disc );
+                if($disc >0)  {
+                    $td = H::fa( $total * ($p->disc/100) );
+                    $this->docpanel->form2->totaldisc->setText($td);
+                }        
+            }
+        }        
+        
         $this->docpanel->form2->total->setText(H::fa($total));
-
-
-
 
     }
 
@@ -865,8 +968,11 @@ class ARMPos extends \App\Pages\Base
          ));
 
         $qty = $item->getQuantity($store);
+        $qtyex = $item->getQuantity() - $qty;
 
         $this->docpanel->editdetail->qtystock->setText(H::fqty($qty));
+        $this->docpanel->editdetail->qtystockex->setText( H::fqty($qtyex));
+        
         $this->docpanel->editdetail->editprice->setText($price);
         if ($this->_tvars["usesnumber"] == true && $item->useserial == 1) {
 
@@ -1044,6 +1150,7 @@ class ARMPos extends \App\Pages\Base
         $this->_doc->headerdata['store'] = $this->_store_id;
         $this->_doc->headerdata['salesource'] = $this->_salesource;
         $this->_doc->headerdata['totaldisc'] = $this->docpanel->form2->totaldisc->getText();
+        $this->_doc->headerdata['promocode'] = $this->docpanel->form2->promocode->getText();
         $this->_doc->headerdata['bonus'] = $this->docpanel->form2->bonus->getText();
         $this->_doc->headerdata['prepaid'] = $this->docpanel->form2->prepaid->getText();
         $this->_doc->headerdata['pricetype'] = $this->getPriceType();
@@ -1054,16 +1161,18 @@ class ARMPos extends \App\Pages\Base
         $this->_doc->amount = $this->docpanel->form2->total->getText();
 
         $this->_doc->save()  ;
-        if(strlen($this->_doc->document_number)>0) {
-            $this->_doc->updateStatus(Document::STATE_EDITED);
-        } else {
-            $this->_doc->updateStatus(Document::STATE_NEW);
+        $this->_doc->updateStatus(Document::STATE_EDITED);
+       
+        //отложеный
+        if($sender->id=="topass") {
+           \App\Session::getSession()->armpass=$this->_doc->document_id; 
         }
-
 
         $this->newdoc(null)  ;
     }
 
+    
+    //оплатить
     public function savedocOnClick($sender) {
 
         $this->_doc->document_number = $this->docpanel->form3->document_number->getText();
@@ -1087,7 +1196,7 @@ class ARMPos extends \App\Pages\Base
         $this->_doc->customer_id = $this->docpanel->form2->customer->getKey();
         $this->_doc->payamount = $this->docpanel->form3->payamount->getText();
 
-        $this->_doc->headerdata['time'] = time();
+        $this->_doc->headerdata['promocode'] = $this->docpanel->form2->promocode->getText();
         $this->_doc->payed = doubleval($this->docpanel->form3->payed->getText()) + doubleval($this->docpanel->form3->payedcard->getText()) ;
         $this->_doc->headerdata['payed'] = $this->docpanel->form3->payed->getText();
         $this->_doc->headerdata['payedcard'] = $this->docpanel->form3->payedcard->getText();
@@ -1108,13 +1217,12 @@ class ARMPos extends \App\Pages\Base
             $this->setError("Якщо у борг або передоплата або нарахування бонусів має бути обраний контрагент");
             return;
         }
-
-
-
+ 
         if (doubleval($this->_doc->headerdata['bonus']) >0 && $this->_doc->customer_id == 0) {
             $this->setError("Якщо у борг    або нарахування бонусів має бути обраний контрагент");
             return;
         }
+
         if (doubleval($this->_doc->headerdata['exch2b']) >0 && $this->_doc->customer_id == 0) {
             $this->setError("Для нарахування бонуса має бути обраний контрагент");
             return;
@@ -1127,8 +1235,7 @@ class ARMPos extends \App\Pages\Base
             $this->setError("При оплаті карткою решта має бути 0");
             return;
         }
-
-
+ 
         $this->_doc->headerdata['pos'] = $this->pos->pos_id;
         $this->_doc->headerdata['pos_name'] = $this->pos->pos_name;
         $this->_doc->headerdata['store'] = $this->_store_id;
@@ -1148,30 +1255,66 @@ class ARMPos extends \App\Pages\Base
         $this->_doc->packDetails('services', $this->_serlist);
 
         $this->_doc->amount = $this->docpanel->form2->total->getText();
+        $isnew  = $this->_doc->document_id ==0;
+        
         $conn = \ZDB\DB::getConnect();
         $conn->BeginTrans();
         try {
 
+            $exeparent=false;  //списано в  редительском
+            if($this->_doc->parent_id >0) {
+                $bd = Document::load($this->_doc->parent_id)->cast();
+                $bd->payamount = 0;
+                $bd->payed = 0;
+                $bd->save();
+                if($bd->state==Document::STATE_WP) {
+                   $bd->updateStatus(Document::STATE_PAYED);
+           
+                }
+                if ($bd->meta_name == 'ServiceAct' ) {
+                    $exeparent=true;
+           
+                }
+                
+                if ($bd->meta_name == 'Order' ) {
+                    if($bd->state == Document::STATE_INPROCESS || $bd->state == Document::STATE_READYTOSHIP) {
+                        $bd->updateStatus(Document::STATE_INSHIPMENT);
+                    }                       
+                    $bd->unreserve();
+                }
+                
+            }
+            
             // проверка на минус  в  количестве
             $allowminus = System::getOption("common", "allowminus");
-            if ($allowminus != 1) {
+            if ($allowminus != 1  && $exeparent==false) {
 
                 foreach ($this->_itemlist as $item) {
                     $qty = $item->getQuantity($this->_doc->headerdata['store']);
                     if ($qty < $item->quantity) {
-                        $this->setError("На складі всього ".H::fqty($qty)." ТМЦ {$item->itemname}. Списання у мінус заборонено");
-                        $conn->RollbackTrans();
-                        return;
+                        throw new \Exception("На складі всього ".H::fqty($qty)." ТМЦ {$item->itemname}. Списання у мінус заборонено");
                     }
                 }
             }
 
+            $this->_doc->save();
+            if($isnew) {
+                $this->_doc->updateStatus(Document::STATE_NEW);
+            }
+
+
+            $this->_doc->updateStatus(Document::STATE_EXECUTED);
+
+            if (H::fa($this->_doc->payamount) > H::fa($this->_doc->payed)) {
+                $this->_doc->updateStatus(Document::STATE_WP);
+            }            
+            
 
             if($this->pos->usefisc == 1) {
                 if($this->docpanel->form3->passfisc->isChecked()) {
                     $this->_doc->headerdata["passfisc"]  = 1;
                 } else {
-
+                    $this->_doc->headerdata["passfisc"]  = 0;;
                     if($this->_tvars['checkbox'] == true) {
 
                         $cb = new  \App\Modules\CB\CheckBox($this->pos->cbkey, $this->pos->cbpin) ;
@@ -1182,16 +1325,23 @@ class ARMPos extends \App\Pages\Base
                             $this->_doc->headerdata["tax_url"] = $ret['tax_url'];
                             $this->_doc->headerdata["checkbox"] = $ret['checkid'];
                         } else {
-                            $this->setError($ret);
-                            $conn->RollbackTrans();
-                            return;
+                            throw new \Exception($ret);
 
                         }
 
 
                     }
+                    if($this->_tvars['vkassa'] == true) {
+                        $vk = new  \App\Modules\VK\VK($this->pos->vktoken) ;
+                        $ret = $vk->Check($this->_doc) ;
 
+                        if(is_array($ret)) {
+                            $this->_doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
+                        } else {
+                            throw new \Exception($ret);
 
+                        }         
+                    }
                     if ($this->_tvars['ppo'] == true) {
 
 
@@ -1207,36 +1357,28 @@ class ARMPos extends \App\Pages\Base
                         }
                         if ($ret['success'] == false) {
                             $this->setErrorTopPage($ret['data']);
-                            $conn->RollbackTrans();
-                            return;
+                            throw new \Exception($ret['data']);
                         } else {
                             //  $this->setSuccess("Выполнено") ;
                             if ($ret['docnumber'] > 0) {
                                 $this->pos->fiscdocnumber = $ret['doclocnumber'] + 1;
                                 $this->pos->save();
                                 $this->_doc->headerdata["fiscalnumber"] = $ret['docnumber'];
+                                $this->_doc->headerdata["fiscalamount"] = $ret['fiscalamount'];
+                                $this->_doc->headerdata["fiscaltest"] = $ret['fiscaltest'];
                             } else {
-                                $this->setError("Не повернено фіскальний номер");
-                                $conn->RollbackTrans();
-                                return;
+                                throw new \Exception("Не повернено фіскальний номер");
                             }
                         }
 
                     }
+                    $this->_doc->save();                    
                 }
+                
+                
             }
-            $isnew  = $this->_doc->document_id ==0;
-            $this->_doc->save();
-            if($isnew) {
-                $this->_doc->updateStatus(Document::STATE_NEW);
-            }
+                        
 
-
-            $this->_doc->updateStatus(Document::STATE_EXECUTED);
-
-            if (H::fa($this->_doc->payamount) > H::fa($this->_doc->payed)) {
-                $this->_doc->updateStatus(Document::STATE_WP);
-            }
 
 
             $conn->CommitTrans();
@@ -1246,6 +1388,10 @@ class ARMPos extends \App\Pages\Base
             $this->setErrorTopPage($ee->getMessage());
 
             $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            if($isnew) {
+               $this->_doc->document_id =0;                
+            }
+            
             return;
         }
         $this->docpanel->form2->customer->setKey(0);
@@ -1264,9 +1410,7 @@ class ARMPos extends \App\Pages\Base
             $this->docpanel->formcheck->qrpaybtn->setVisible(true);
             $this->qrimg->setText($qr['qr'], true);
         }
-
-
-
+  
 
     }
 
@@ -1302,7 +1446,35 @@ class ARMPos extends \App\Pages\Base
             return;
         }
 
+         if($this->_tvars['vkassa'] == true) {
 
+
+            $vk = new  \App\Modules\VK\VK($this->pos->vktoken) ;
+            $ret = $vk->OpenShift() ;
+
+            if($ret === true) {
+                $this->setSuccess("Зміна відкрита");
+            } else {
+                $this->setError($ret);
+            }
+            if($this->pos->autoshift >0){
+                $task = new  \App\Entity\CronTask()  ;
+                $task->tasktype = \App\Entity\CronTask::TYPE_AUTOSHIFT;
+                $t =   strtotime(  date('Y-m-d ') .  $this->pos->autoshift.':00' );  
+                 
+                $task->starton=$t;
+                $task->taskdata= serialize(array(
+                       'pos_id'=>$this->pos->pos_id, 
+                       'type'=>'vk' 
+       
+                    ));         
+                $task->save();
+                    
+            }  
+
+
+            return;
+        }
         $ret = \App\Modules\PPO\PPOHelper::shift($this->pos->pos_id, true);
         if ($ret['success'] == false && $ret['doclocnumber'] > 0) {
             //повторяем для  нового номера
@@ -1318,7 +1490,7 @@ class ARMPos extends \App\Pages\Base
             if ($ret['doclocnumber'] > 0) {
                 $this->pos->fiscdocnumber = $ret['doclocnumber'] + 1;
                 $this->pos->save();
-                //   $this->_doc->headerdata["fiscalnumber"] = $ret['docnumber'];
+
             }
             \App\Modules\PPO\PPOHelper::clearStat($this->pos->pos_id);
             
@@ -1360,13 +1532,26 @@ class ARMPos extends \App\Pages\Base
 
             return;
         }
+        if($this->_tvars['vkassa'] == true) {
+
+            $vk = new  \App\Modules\VK\VK($this->pos->vktoken) ;
+            $ret = $vk->CloseShift() ;
+
+            if($ret === true) {
+                $this->setSuccess("Зміна закрита");
+            } else {
+                $this->setError($ret);
+            }
+
+            return;
+        }
 
         $ret = $this->zform();
         if ($ret == true) {
             $this->closeshift();
         }
     }
-
+    //для ПРРО
     public function zform() {
 
         $stat = \App\Modules\PPO\PPOHelper::getStat($this->pos->pos_id);
@@ -1400,6 +1585,7 @@ class ARMPos extends \App\Pages\Base
         return true;
     }
 
+    //для ПРРО
     public function closeshift() {
         $ret = \App\Modules\PPO\PPOHelper::shift($this->pos->pos_id, false);
         if ($ret['success'] == false && $ret['doclocnumber'] > 0) {
@@ -1434,13 +1620,12 @@ class ARMPos extends \App\Pages\Base
         $row->add(new Label('rownotes', $doc->notes));
         $row->add(new Label('rowauthor', $doc->username));
         $row->add(new ClickLink('checkedit'))->onClick($this, "onEdit");
-        $row->add(new ClickLink('checkfisc', $this, "onFisc"))->setVisible(($doc->headerdata['passfisc'] ?? "") ==1) ;
         $row->checkedit->setVisible($doc->state < 4);
 
         $row->add(new \Zippy\Html\Link\RedirectLink('checkreturn', "\\App\\Pages\\Doc\\ReturnIssue", array(0,$doc->document_id)));
         $row->checkreturn->setVisible($doc->state > 4);
         if ($doc->document_id == $this->_doc->document_id) {
-            $row->setAttribute('class', 'table-success');
+           // $row->setAttribute('class', 'table-success');
         }
 
 
@@ -1473,8 +1658,14 @@ class ARMPos extends \App\Pages\Base
         $t .="</table> " ;
 
         $row->rtlist->setText($t, true);
+        $row->add(new ClickLink('checkfisc', $this, "onFisc"))->setVisible(($doc->headerdata['passfisc'] ?? "") == 1) ;
 
-
+        if($doc->state <5) {
+           $row->checkfisc->setVisible(false);
+        }
+        if($this->pos->usefisc != 1) {
+           $row->checkfisc->setVisible(false);
+        }
 
     }
 
@@ -1504,73 +1695,118 @@ class ARMPos extends \App\Pages\Base
 
         $doc =  $sender->getOwner()->getDataItem();
 
-        if($this->_tvars['checkbox'] == true) {
+        $conn = \ZDB\DB::getConnect();
+        $conn->BeginTrans();
+        try {
 
-            $cb = new  \App\Modules\CB\CheckBox($this->pos->cbkey, $this->pos->cbpin) ;
-            $ret = $cb->Check($doc) ;
+            if($this->_tvars['checkbox'] == true) {
 
-            if(is_array($ret)) {
-                $doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
-                $doc->headerdata["tax_url"] = $ret['tax_url'];
-                $doc->headerdata["checkbox"] = $ret['checkid'];
-                $doc->headerdata["passfisc"] = 0;
-                $doc->save();
-                $this->setSuccess("Виконано");
-            } else {
-                $this->setError($ret);
+                $cb = new  \App\Modules\CB\CheckBox($this->pos->cbkey, $this->pos->cbpin) ;
+                $ret = $cb->Check($doc) ;
 
-                return;
-
-            }
-
-
-        }
-
-
-        if ($this->_tvars['ppo'] == true) {
-
-
-            $doc->headerdata["fiscalnumberpos"]  = $this->pos->fiscalnumber;
-
-
-            $ret = \App\Modules\PPO\PPOHelper::check($doc);
-            if ($ret['success'] == false && $ret['doclocnumber'] > 0) {
-                //повторяем для  нового номера
-                $this->pos->fiscdocnumber = $ret['doclocnumber'];
-                $this->pos->save();
-                $ret = \App\Modules\PPO\PPOHelper::check($this->_doc);
-            }
-            if ($ret['success'] == false) {
-                $this->setErrorTopPage($ret['data']);
-
-                return;
-            } else {
-                //  $this->setSuccess("Выполнено") ;
-                if ($ret['docnumber'] > 0) {
-                    $this->pos->fiscdocnumber = $ret['doclocnumber'] + 1;
-                    $this->pos->save();
-                    $doc->headerdata["fiscalnumber"] = $ret['docnumber'];
+                if(is_array($ret)) {
+                    $doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
+                    $doc->headerdata["tax_url"] = $ret['tax_url'];
+                    $doc->headerdata["checkbox"] = $ret['checkid'];
                     $doc->headerdata["passfisc"] = 0;
                     $doc->save();
                     $this->setSuccess("Виконано");
                 } else {
-                    $this->setError("Не повернено фіскальний номер");
 
-                    return;
+                    throw new \Exception($ret);
+
                 }
+
+
+            }
+            if($this->_tvars['vkassa'] == true) {
+                $vk = new  \App\Modules\VK\VK($this->pos->vktoken) ;
+                $ret = $vk->Check($doc) ;
+
+                if(is_array($ret)) {
+                    $doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
+                    $doc->headerdata["passfisc"] = 0;
+                    $doc->save();
+                  
+                } else {
+                    throw new \Exception($ret);
+
+
+                }  
             }
 
-        }
+
+            if ($this->_tvars['ppo'] == true) {
 
 
+                $doc->headerdata["fiscalnumberpos"]  = $this->pos->fiscalnumber;
 
-        $this->checklistpan->checklist->Reload(false);
 
+                $ret = \App\Modules\PPO\PPOHelper::check($doc);
+                if ($ret['success'] == false && $ret['doclocnumber'] > 0) {
+                    //повторяем для  нового номера
+                    $this->pos->fiscdocnumber = $ret['doclocnumber'];
+                    $this->pos->save();
+                    $ret = \App\Modules\PPO\PPOHelper::check($this->_doc);
+                }
+                if ($ret['success'] == false) {
+                      throw new \Exception($ret['data']);
+
+                } else {
+                    //  $this->setSuccess("Выполнено") ;
+                    if ($ret['docnumber'] > 0) {
+                        $this->pos->fiscdocnumber = $ret['doclocnumber'] + 1;
+                        $this->pos->save();
+                        $doc->headerdata["fiscalnumber"] = $ret['docnumber'];
+                        $doc->headerdata["passfisc"] = 0;
+                        $doc->save();
+                        $this->setSuccess("Виконано");
+                    } else {
+                        throw new \Exception("Не повернено фіскальний номер");
+
+                    }
+                }
+
+            }
+
+        
+            $conn->CommitTrans();
+        } catch(\Throwable $ee) {
+            global $logger;
+            $conn->RollbackTrans();
+            $this->setErrorTopPage($ee->getMessage());
+
+            $logger->error($ee->getMessage() . " Документ " . $doc->meta_desc);
+      
+            
+            return;
+        }        
+        
+        $this->updatechecklist(null);
     }
 
     public function onEdit($sender) {
-        $doc =  $sender->getOwner()->getDataItem();
-        $this->_doc = Document::load($doc->document_id)->cast();
+        $item =  $sender->getOwner()->getDataItem();
+        $doc = Document::load($item->document_id);
+        $this->loadDoc($doc);
+    }
+
+    public function fromPass($sender) {
+        $pn= intval( \App\Session::getSession()->armpass ?? 0 );        
+        $doc = Document::load($pn);
+        if($doc != null && $doc->state <5) {
+           $this->loadDoc($doc);    
+        }
+        \App\Session::getSession()->armpass = null;
+        
+    }
+    
+    public function loadDoc($doc) {
+        $pn= intval( \App\Session::getSession()->armpass ?? 0 );        
+        if($pn==$doc->document_id) {
+            \App\Session::getSession()->armpass = null;
+        }
+        $this->_doc = $doc->cast();
 
         $this->docpanel->setVisible(true);
         $this->docpanel->form2->setVisible(true);
@@ -1598,6 +1834,7 @@ class ARMPos extends \App\Pages\Base
         }
 
 
+        $this->docpanel->form2->promocode->setText($this->_doc->headerdata['promocode']);
         $this->docpanel->form2->bonus->setText($this->_doc->headerdata['bonus']);
         $this->docpanel->form2->totaldisc->setText($this->_doc->headerdata['totaldisc']);
         $this->docpanel->form2->prepaid->setText($this->_doc->headerdata['prepaid']);
@@ -1650,6 +1887,30 @@ class ARMPos extends \App\Pages\Base
 
     }
 
+    public function checkPromo($args, $post=null) {
+        $code = trim($args[0]) ;
+        if($code=='')  {
+            return json_encode([], JSON_UNESCAPED_UNICODE);             
+        }
+        $r = \App\Entity\PromoCode::check($code,$this->docpanel->form2->customer->getKey())  ;
+        if($r != ''){
+            return json_encode(array('error'=>$r), JSON_UNESCAPED_UNICODE);                
+        }
+        $total=$this->_calcTotal();
+        $p = \App\Entity\PromoCode::findByCode($code);
+        $disc = doubleval($p->disc );
+        if($disc >0)  {
+            $td = H::fa( $total * ($p->disc/100) );
+            $ret=array('disc'=>$td) ;
+            return json_encode($ret, JSON_UNESCAPED_UNICODE);
+             
+        }        
+        
+        return json_encode([], JSON_UNESCAPED_UNICODE);             
+       
+
+    }
+
     public function OnPrint($sender) {
 
 
@@ -1694,7 +1955,7 @@ class ARMPos extends \App\Pages\Base
          ));
 
         $qty = $item->getQuantity($store);
-
+        $this->docpanel->form2->storeqtysm->setText("На складі: ".H::fqty($qty) );
 
 
     }
@@ -1720,7 +1981,7 @@ class ARMPos extends \App\Pages\Base
         
 
         $list = array();
-        foreach (Item::findYield($criteria)as $key => $value) {
+        foreach (Item::findYield($criteria,"itemname") as $key => $value) {
 
             if(intval($value->useserial) != 0) {
                 continue;
@@ -1745,7 +2006,12 @@ class ARMPos extends \App\Pages\Base
 
         $id = $this->docpanel->form2->addtovarsm->getKey();
         if ($id == 0) {
-            $this->setError("Не вибраний товар");
+            $this->setError("Не вибрано товар");
+            return;
+        }
+        $n = trim($this->docpanel->form2->addtovarsm->getText());
+        if (strlen($n) == 0) {
+            $this->setError("Не вибрано товар");
             return;
         }
 
@@ -1753,7 +2019,7 @@ class ARMPos extends \App\Pages\Base
         $item = Item::load($id);
 
 
-        $item->quantity = $this->docpanel->form2->qtysm->getText();
+        $item->quantity = doubleval($this->docpanel->form2->qtysm->getText());
         if ($item->quantity == 0) {
             $this->setError("Не введена  кількість");
             return;
@@ -1796,6 +2062,7 @@ class ARMPos extends \App\Pages\Base
         $this->docpanel->form2->addtovarsm->setText('');
 
         $this->docpanel->form2->qtysm->setText("");
+        $this->docpanel->form2->storeqtysm->setText("");
 
         $this->_rowid = -1;
 
@@ -1809,5 +2076,12 @@ class ARMPos extends \App\Pages\Base
 
     }
 
-
+    public function beforeRender() {
+        
+        $pn= intval( \App\Session::getSession()->armpass ?? 0 );        
+        $this->docpanel->form2->topass->setVisible($pn==0);
+        $this->docpanel->form2->frompass->setVisible($pn>0);
+        
+        parent::beforeRender()  ;
+    }
 }

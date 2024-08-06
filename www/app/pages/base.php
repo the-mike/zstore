@@ -26,6 +26,9 @@ class Base extends \Zippy\Html\WebPage
             return;
         }
 
+ 
+         
+        
         $this->_tvars['curversion'] = System::CURR_VERSION ;
 
         $options = System::getOptions('common');
@@ -38,12 +41,16 @@ class Base extends \Zippy\Html\WebPage
         $this->_tvars["useval"] = $options['useval'] == 1;
         $this->_tvars["usecattree"] = $options['usecattree'] == 1;
         $this->_tvars["usemobileprinter"] = $user->usemobileprinter == 1;
-        $this->_tvars["noshowpartion"] = System::getUser()->noshowpartion;
-        $this->_tvars["showsidemenu"] = !(System::getUser()->hidemenu == true);
+        $this->_tvars["canevent"] = $user->canevent == 1;
+        if($user->rolename=='admins') {
+            $this->_tvars["canevent"] = true;
+        }
+        $this->_tvars["noshowpartion"] = $user->noshowpartion;
+        $this->_tvars["showsidemenu"] = !($user->hidemenu == true);
         $this->_tvars["twodigit"] = round($options['amdigits']) > 0;
 
-        $this->_tvars['qtydigits']  = intval($common['qtydigits'] ?? 0);
-        $this->_tvars['amdigits']  = intval($common['amdigits'] ?? 0);
+        $this->_tvars['qtydigits']  = intval($options['qtydigits'] ?? 0);
+        $this->_tvars['amdigits']  = intval($options['amdigits'] ?? 0);
 
         
         $this->_tvars["usesnumber"] = $options['usesnumber']  > 0;
@@ -76,7 +83,7 @@ class Base extends \Zippy\Html\WebPage
         $this->nbform->add(new \Zippy\Html\Form\DropDownChoice('nbbranch', $blist, $this->branch_id))->onChange($this, 'onnbFirm');
 
         $this->add(new ClickLink('logout', $this, 'LogoutClick'));
-        $this->add(new Label('username', $user->username));
+        $this->add(new Label('loginname', $user->username));
 
 
         //меню
@@ -126,8 +133,11 @@ class Base extends \Zippy\Html\WebPage
         $this->_tvars["ppo"] = $modules['ppo'] == 1;
         $this->_tvars["np"] = $modules['np'] == 1;
         $this->_tvars["promua"] = $modules['promua'] == 1;
-        $this->_tvars["paperless"] = $modules['paperless'] == 1;
         $this->_tvars["checkbox"] = $modules['checkbox'] == 1;
+        $this->_tvars["vkassa"] = $modules['vkassa'] == 1;
+        $this->_tvars["horoshop"] = $modules['horoshop'] == 1;
+        $this->_tvars["vdoc"] = $modules['vdoc'] == 1;
+
 
 
         //  $printer = System::getOptions('printer');
@@ -140,39 +150,45 @@ class Base extends \Zippy\Html\WebPage
 
 
         //доступы к  модулям
-        if (strpos(System::getUser()->modules, 'shop') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'shop') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["shop"] = false;
         }
-        if (strpos(System::getUser()->modules, 'note') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'note') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["note"] = false;
         }
-        if (strpos(System::getUser()->modules, 'issue') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'issue') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["issue"] = false;
         }
-        if (strpos(System::getUser()->modules, 'ocstore') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'ocstore') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["ocstore"] = false;
         }
-        if (strpos(System::getUser()->modules, 'woocomerce') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'woocomerce') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["woocomerce"] = false;
         }
 
-        if (strpos(System::getUser()->modules, 'ppo') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'ppo') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["ppo"] = false;
         }
-        if (strpos(System::getUser()->modules, 'np') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'np') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["np"] = false;
         }
-        if (strpos(System::getUser()->modules, 'promua') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'promua') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["promua"] = false;
         }
-        if (strpos(System::getUser()->modules, 'paperless') === false && System::getUser()->rolename != 'admins') {
-            $this->_tvars["paperless"] = false;
-        }
-        if (strpos(System::getUser()->modules, 'checkbox') === false && System::getUser()->rolename != 'admins') {
+        if (strpos(System::getUser()->modules ?? '', 'checkbox') === false && System::getUser()->rolename != 'admins') {
             $this->_tvars["checkbox"] = false;
         }
+        if (strpos(System::getUser()->modules ?? '', 'vkassa') === false && System::getUser()->rolename != 'admins') {
+            $this->_tvars["vkassa"] = false;
+        }
+        if (strpos(System::getUser()->modules ?? '', 'horoshop') === false && System::getUser()->rolename != 'admins') {
+            $this->_tvars["horoshop"] = false;
+        }
+        if (strpos(System::getUser()->modules ?? '', 'vdoc') === false && System::getUser()->rolename != 'admins') {
+            $this->_tvars["vdoc"] = false;
+        }
 
-        $this->_tvars["fiscal"] = $this->_tvars["checkbox"] || $this->_tvars["ppo"];
+        $this->_tvars["fiscal"] = $this->_tvars["checkbox"] || $this->_tvars["ppo"] || $this->_tvars["vkassa"];
 
         if ($this->_tvars["shop"] ||
             $this->_tvars["ocstore"] ||
@@ -180,8 +196,9 @@ class Base extends \Zippy\Html\WebPage
             $this->_tvars["note"] ||
             $this->_tvars["issue"] ||
             $this->_tvars["promua"] ||
-            $this->_tvars["paperless"] ||
             $this->_tvars["ppo"] ||
+            $this->_tvars["horoshop"] ||
+            $this->_tvars["vdoc"] ||
             $this->_tvars["np"]
         ) {
             $this->_tvars["showmodmenu"] = true;
@@ -221,9 +238,7 @@ class Base extends \Zippy\Html\WebPage
 
 
             $w = "     TIME_TO_SEC(timediff(now(),lastactive)) <300  ";
-            if($conn->dataProvider=="postgres") {
-                $w = "     EXTRACT(EPOCH FROM now() - lastactive) <300  ";
-            }
+          
 
             if ($this->branch_id > 0) {
                 $w .= "  and  employee_id  in (select employee_id from employees where branch_id ={$this->branch_id}) ";
@@ -256,10 +271,10 @@ class Base extends \Zippy\Html\WebPage
         $this->_tvars['showtoasts']  =  Session::getSession()->toasts ?? true ;
         Session::getSession()->toasts = false;
 
-        $duration = \App\Session::getSession()->duration() ;
-        $this->_tvars['showtips'] = $duration < 300   ;
+    //    $duration =  Session::getSession()->duration() ;
+     //   $this->_tvars['showver'] = $duration < 60   ;
 
-
+        //планировщик
         $this->_tvars['cron']  = false;
 
         $last = \App\Helper::getKeyValInt('lastcron')  ;
@@ -267,7 +282,21 @@ class Base extends \Zippy\Html\WebPage
             $this->_tvars['cron']  = true;
         }
 
-
+        //миграция  данных
+        if(  Session::getSession()->migrationcheck != true && ($this instanceof \App\Pages\Update)==false) {
+            Helper::migration() ;
+            Session::getSession()->migrationcheck = true;
+        }
+       
+        //откат   todo remove
+        if($this->_tvars['curversion']== '6.11.1'  || $this->_tvars['curversion']=='6.11.0') {
+            $conn = \ZDB\DB::getConnect();
+            $conn->Execute("delete from custacc   ") ;
+            \App\Helper::setKeyVal('migrationbonus',null) ;
+            \App\Helper::setKeyVal('migrationbalans',null) ;
+                              
+        }
+   
     }
 
     public function LogoutClick($sender) {
@@ -322,11 +351,12 @@ class Base extends \Zippy\Html\WebPage
     }
 
     public function beforeRender() {
+        parent::beforeRender()  ;
         $user = System::getUser();
         $this->_tvars['notcnt'] = \App\Entity\Notify::isNotify($user->user_id);
         $this->_tvars['taskcnt'] = \App\Entity\Event::isNotClosedTask($user->user_id);
         $this->_tvars['alerterror'] = "";
-        if (strlen(System::getErrorMsgTopPage()) > 0) {
+        if (strlen(System::getErrorMsgTopPage() ?? '') > 0) {
             $this->_tvars['alerterror'] = System::getErrorMsgTopPage();
 
             $this->goAnkor('topankor');
@@ -338,18 +368,18 @@ class Base extends \Zippy\Html\WebPage
     protected function afterRender() {
 
         $user = System::getUser();
-        if (strlen(System::getErrorMsg()) > 0) {
+        if (strlen(System::getErrorMsg() ?? '') > 0) {
 
             $this->addJavaScript("toastr.error('" . System::getErrorMsg() . "','',{'timeOut':'8000'})        ", true);
         }
 
-        if (strlen(System::getWarnMsg()) > 0) {
+        if (strlen(System::getWarnMsg() ?? '') > 0) {
             $this->addJavaScript("toastr.warning('" . System::getWarnMsg() . "','',{'timeOut':'4000'})        ", true);
         }
-        if (strlen(System::getSuccesMsg()) > 0) {
+        if (strlen(System::getSuccesMsg() ?? '') > 0) {
             $this->addJavaScript("toastr.success('" . System::getSuccesMsg() . "','',{'timeOut':'2000'})        ", true);
         }
-        if (strlen(System::getInfoMsg()) > 0) {
+        if (strlen(System::getInfoMsg() ?? '') > 0) {
             $this->addJavaScript("toastr.info('" . System::getInfoMsg() . "','',{'timeOut':'3000'})        ", true);
         }
 
@@ -359,6 +389,9 @@ class Base extends \Zippy\Html\WebPage
         $this->setSuccess('');
         $this->setInfo('');
         $this->setWarn('');
+        
+        
+        parent::afterRender()  ;
     }
 
     //Перезагрузить страницу  с  клиента
@@ -424,18 +457,18 @@ class Base extends \Zippy\Html\WebPage
             $header['disc'] = false;
         }
         $header['last'] = false;
-        $doc = \App\Entity\doc\Document::getFirst(" customer_id={$c->customer_id}", "document_id desc") ;
+        $doc = \App\Entity\Doc\Document::getFirst(" customer_id={$c->customer_id}", "document_id desc") ;
         if($doc != null) {
             $header['last']= $doc->meta_desc .' '. $doc->document_number;
             $header['lastdate']=Helper::fd($doc->document_date);
             $header['lastsum']=Helper::fa($doc->amount);
-            $header['laststatus']   =  \App\Entity\doc\Document::getStateName($doc->state)  ;
+            $header['laststatus']   =  \App\Entity\Doc\Document::getStateName($doc->state)  ;
 
-            $goods = [];
+            $header['goods'] = [];
 
             $sql = "select items.item_id, items.itemname,items.item_code    from 
              entrylist_view  join items  on items.item_id = entrylist_view.item_id 
-             where customer_id={$c->customer_id}  
+             where entrylist_view.customer_id={$c->customer_id}  
              order  by  entry_id desc  limit 0,10 "    ;
 
             foreach($conn->Execute($sql) as $i) {
@@ -495,40 +528,94 @@ class Base extends \Zippy\Html\WebPage
         }
         if ($user->userlogin == "admin") {
             if ($user->userpass == "admin" || $user->userpass == '$2y$10$GsjC.thVpQAPMQMO6b4Ma.olbIFr2KMGFz12l5/wnmxI1PEqRDQf.') {
-                $list[] = array('title' => "Змініть у профілі пароль за замовчуванням");
+                $list[] = array( 'type'=>'w', 'title' => "Змініть у профілі пароль за замовчуванням");
 
             }
         }
         if ($user->rolename == "admins") {
             if (\App\Entity\Notify::isNotify(\App\Entity\Notify::SYSTEM)) {
-                $list[] = array('title' => "Наявні непрочитані системні повідомлення");
+                $list[] = array('type'=>'i','title' => "Є непрочитані системні повідомлення");
 
             }
-            //проверка  новой версии
-
-            $v = @file_get_contents("https://zippy.com.ua/version.json?t=" . time());
-            $v = @json_decode($v, true);
-
-            if (strlen($v['version']) > 0) {
-                $c = str_replace("v", "", \App\System::CURR_VERSION);
-                $n = str_replace("v", "", $v['version']);
-
-                $ca = explode('.', $c) ;
-                $na = explode('.', $n) ;
-
-                if ($na[0] > $ca[0] || $na[1] > $ca[1] || $na[2] > $ca[2]) {
-                    $list[] = array('title' => " Доступна нова версiя {$v['version']}  <a target=\"_blank\" href=\"https://zippy.com.ua/upsate\">Перейти...</a> ");
-
-                }
-
-            }
-
+             
+            
         }
 
         return json_encode($list, JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+    * добавляет стьроку  заказа в  заявку  поставщику
+    * 
+    * @param mixed $args
+    * @param mixed $post
+    * @return mixed
+    */
+    public function addItemToCO($args, $post=null) {
+        try{
+            $e = \App\Entity\Entry::getFirst("item_id={$args[0]} and quantity > 0 and document_id in (select document_id from documents_view where  meta_name='GoodsReceipt' ) ","entry_id desc")  ;
+            $d = \App\Entity\Doc\Document::load($e->document_id)  ;
 
+            if($d == null) {
+                return "По  даному  ТМЦ  закупок не  було";
+            }
+            $price = $e->partion;
+            $quantity = $e->quantity;
+            $customer_id = $d->customer_id;
+            if($args[1] > 0) {
+                $quantity = $args[1] ;
+            }
+            $co = \App\Entity\Doc\Document::getFirst("meta_name='OrderCust' and  customer_id={$d->customer_id}   and state=1 ","document_id desc") ;
+            
+            if($co==null) {
+                $co = \App\Entity\Doc\Document::create('OrderCust');
+                $co->document_number = $co->nextNumber();        
+                $co->customer_id = $customer_id;        
+                $co->save();
+                $co->updateStatus(1);
+            }  else {
+                $co->document_date = time(); 
+                $co->save();
+            }
+
+            $items=  $co->unpackDetails('detaildata');
+            $i=-1;
+            foreach($items as $k=>$v)  {
+                if($v->item_id == $args[0] ) {
+                    $i=  $k;
+                    break;
+                }
+            }
+            if($i==-1)  {
+                $item = \App\Entity\Item::load($args[0]);
+     
+                $item->quantity = $quantity;
+                $item->price = $price;
+                $item->rowid = $item->item_id;        
+                $items[$item->rowid]=$item;
+            }   else {
+                $items[$i]->quantity += $quantity;  
+            }
+            $total = 0;
+
+
+            foreach ($items as $item) {
+                $item->amount = \App\Helper::fa($item->price * $item->quantity);
+
+                $total = $total + $item->amount;
+            }
+            $co->amount= \App\Helper::fa($total);
+            
+            
+            $co->packDetails('detaildata',$items);
+            $co->save();
+            
+            return "";
+        } catch(\Exception $e){
+            return $e->getMessage() ;
+        }
+
+    }
 
     //callPM
 
@@ -555,6 +642,7 @@ class Base extends \Zippy\Html\WebPage
             $ret['service_id']   = $service_id;
             $ret['service_name'] = $ser->service_name;
             $ret['category'] = $ser->category;
+            $ret['msr'] = $ser->msr;
             $ret['pureprice'] = $ser->getPurePrice();
             $ret['price'] = $ser->getPrice($args[1]);
             if($ret['pureprice'] > $ret['price']) {
@@ -587,7 +675,7 @@ class Base extends \Zippy\Html\WebPage
 
 
 
-            $ret['lastpartion'] = $item->getLastPartion(); //последняя  закупка
+       //     $ret['lastpartion'] = $item->getLastPartion(0, "", true); //последняя  закупка
             $ret['qtystock'] = $item->getQuantity(); // на  складе
             $ret['item_code'] = $item->item_code;
             $ret['useserial'] = $item->useserial;
@@ -639,17 +727,12 @@ class Base extends \Zippy\Html\WebPage
         $item->cat_id = $post->cat_id;
 
 
-
-        if (strlen($item->item_code) > 0 && System::getOption("common", "nocheckarticle") != 1) {
-            $code = \App\Entity\Item::qstr($this->_item->item_code);
-            $cnt = \App\Entity\Item::findCnt("item_id <> {$item->item_id} and item_code={$code} ");
-            if ($cnt > 0) {
-                return json_encode(array('error'=>'Такий артикул вже існує'), JSON_UNESCAPED_UNICODE);
-            }
+        if ($item->checkUniqueArticle()==false) {
+           return json_encode(array('error'=>'Такий артикул вже існує'), JSON_UNESCAPED_UNICODE);
         }
 
-        if (strlen($item->item_code) == 0 && System::getOption("common", "autoarticle") == 1) {
-            $item->item_code = \App\Entity\Item::getNextArticle();
+        if (strlen($item->item_code) == 0 ){
+           $item->item_code =  \App\Entity\Item::getNextArticle();
         }
 
         $itemname = \App\Entity\Item::qstr($item->itemname);

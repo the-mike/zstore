@@ -47,6 +47,7 @@ class Roles extends \App\Pages\Base
 
 
         $this->editpan->editform->add(new CheckBox('editnoshowpartion'));
+        $this->editpan->editform->add(new CheckBox('editcanevent'));
         $this->editpan->editform->add(new CheckBox('editshowotherstores'));
 
         //виджеты
@@ -68,6 +69,9 @@ class Roles extends \App\Pages\Base
         $this->editpan->editform->add(new CheckBox('editpu'));
         $this->editpan->editform->add(new CheckBox('editpl'));
         $this->editpan->editform->add(new CheckBox('editcb'));
+        $this->editpan->editform->add(new CheckBox('editvk'));
+        $this->editpan->editform->add(new CheckBox('edithr'));
+        $this->editpan->editform->add(new CheckBox('editvdoc'));
 
         $this->editpan->editform->add(new Button('cancel'))->onClick($this, 'cancelOnClick');
 
@@ -139,6 +143,7 @@ class Roles extends \App\Pages\Base
 
 
         $this->editpan->editform->editnoshowpartion->setChecked($this->role->noshowpartion);
+        $this->editpan->editform->editcanevent->setChecked($this->role->canevent);
         $this->editpan->editform->editshowotherstores->setChecked($this->role->showotherstores);
 
 
@@ -186,11 +191,17 @@ class Roles extends \App\Pages\Base
         if (strpos($this->role->modules, 'promua') !== false) {
             $this->editpan->editform->editpu->setChecked(true);
         }
-        if (strpos($this->role->modules, 'paperless') !== false) {
-            $this->editpan->editform->editpl->setChecked(true);
-        }
         if (strpos($this->role->modules, 'checkbox') !== false) {
             $this->editpan->editform->editcb->setChecked(true);
+        }
+        if (strpos($this->role->modules, 'vkassa') !== false) {
+            $this->editpan->editform->editvk->setChecked(true);
+        }
+        if (strpos($this->role->modules, 'horoshop') !== false) {
+            $this->editpan->editform->edithr->setChecked(true);
+        }
+        if (strpos($this->role->modules, 'vdoc') !== false) {
+            $this->editpan->editform->editvdoc->setChecked(true);
         }
     }
 
@@ -230,6 +241,7 @@ class Roles extends \App\Pages\Base
 
     public function saveaclOnClick($sender) {
 
+        $this->role->canevent = $this->editpan->editform->editcanevent->isChecked() ? 1 : 0;
         $this->role->noshowpartion = $this->editpan->editform->editnoshowpartion->isChecked() ? 1 : 0;
         $this->role->showotherstores = $this->editpan->editform->editshowotherstores->isChecked() ? 1 : 0;
 
@@ -317,11 +329,17 @@ class Roles extends \App\Pages\Base
         if ($this->editpan->editform->editpu->isChecked()) {
             $modules = $modules . ',promua';
         }
-        if ($this->editpan->editform->editpl->isChecked()) {
-            $modules = $modules . ',paperless';
-        }
         if ($this->editpan->editform->editcb->isChecked()) {
             $modules = $modules . ',checkbox';
+        }
+        if ($this->editpan->editform->editvk->isChecked()) {
+            $modules = $modules . ',vkassa';
+        }
+        if ($this->editpan->editform->edithr->isChecked()) {
+            $modules = $modules . ',horoshop';
+        }
+        if ($this->editpan->editform->editvdoc->isChecked()) {
+            $modules = $modules . ',vdoc';
         }
 
         $this->role->modules = trim($modules, ',');

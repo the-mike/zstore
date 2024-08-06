@@ -146,6 +146,13 @@
                      <th class="text-right">Замовлено</th>
                      <th>На складi</th>
                      <th>У постачальникiв</th>
+                      {{#isciprod}}
+                  
+                     <th>Гот. до вир.</th>
+                     {{/isciprod}}
+                    
+                  
+                     <th> </th>
                      </tr>
                      {{#citems}}
                      <tr>
@@ -153,7 +160,7 @@
                         <td>{{itemcode}}</td>
                         <td class="text-right">{{itemqty}}</td>
                         <td>     
-                          <table class="ctable">
+                          <table style="font-size:smaller"  class="ctable">
                               {{#citemsstore}}
                               <tr>
                                  <td>{{itstore}}</td>
@@ -163,7 +170,7 @@
                           </table>
                         </td>
                         <td>
-                          <table class="ctable"> 
+                          <table style="font-size:smaller"  class="ctable"> 
                               {{#citemscust}}
                               <tr>
                                  <td>{{itcust}}</td>
@@ -171,17 +178,54 @@
                                  <td class="text-right">{{itcustprice}}</td>
                                  <td class="text-right">{{itcustqty}}</td>
                                  <td >{{itcustupdated}}</td>
-                                 <td >{{itcustcomment}}</td>
+                              
                               </tr>
                              {{/citemscust}} 
                           </table>
                         </td>
+                      {{#isciprod}}
+                        
+                       <td>
+                          <table    class="ctable"> 
+                              {{#ciprod}}
+                              <tr>
+                                 <td style="width:100px;" class="text-right">{{prqty}}</td>
+                              </tr>
+                             {{/ciprod}} 
+                          </table>
+                        </td>
+                      {{/isciprod}}
+                        
+                        <td> <a href="javascript:void(0)" onclick="{{toco}}" > В закупку</a>  </td>                        
                      </tr>
                      {{/citems}} 
                   </table>
                 </details>
+                  {{#issitems}} 
+                  </div>
+                  <div class="col-12 col-md-10  col-xl-8">
+          
+                  
+                <details>
+                  <summary> Товари в  закупцi</summary>
+               <table class="table table-sm">
+                     <tr>
+                     <th>Заявка</th>
+                     <th>Постачальник</th>
+                     <th >Поставка</th>
+                     </tr>
+                       {{#sitems}} 
+                     <tr>
+                     <td> {{dnum}}</td>
+                     <td>{{dc}} </td>
+                     <td  >{{dd}} </td>
+                     <tr> 
+                      {{/sitems}} 
+                       </table> 
+                </details>
+                 {{/issitems}} 
             </div>
-             <div class="col-12 col-xl-10">      
+             <div class="col-12 col-xl-10 mt-2">      
                 <div class="navbar nav">
                     <form zippy="statusform" class="form-inline row">
                        <div class="col-12 mb-2">      
@@ -197,7 +241,7 @@
                        <div class="col-12"> 
                         <span>Створити </span> 
                         <button zippy="bttn" class="btn btn-info  mr-2">  ТТН</button>
-                        <button zippy="bpos" class="btn btn-info  mr-2"> Чек                </button>
+                        <button zippy="bpos" class="btn btn-info  mr-2">  {{^fiscal}} Чек   {{/fiscal}}     {{#fiscal}}  Фіскальний чек    {{/fiscal}}                 </button>
                         <button zippy="bgi" class="btn btn-info  mr-2">  Видаткову накладну                </button>
                         <button zippy="bco" class="btn btn-info  mr-2">  Заявку постачальнику               </button>
                         <button zippy="btask" type="submit" class=" btn btn-info mr-2 ">  Наряд</button>
@@ -219,7 +263,7 @@
 
                     </form>       
                      </td><td>  
-                    <form zippy="moveform" class="form-inline mt-1">
+                    <form zippy="moveform" class="form-inline mt-1 ml-4">
                         <label class="mr-2">Перевести на: </label>
                        {{#usebranch}}
 
@@ -262,6 +306,11 @@
                     </div>
                     {{/usescanner}}        
                    <table class="table table-sm">
+                   <tr><th>
+<i onclick=" $('.seldel').prop('checked', $('.seldel').prop('checked') == false);"
+                                style="width:30px;cursor:pointer" title="Зняти/виставити прапорець"
+                                    class="fa fa-check-double "></i>                   
+                   </th><th colspan="4"></th></tr>
                    <tr  zippy="edititemlist">
                       <td style="width:20px"><input zippy="checkscan" class="seldel mt-1" type="checkbox"><td>
                       <td zippy="editlistname"><td>
@@ -275,7 +324,7 @@
                     <button zippy="editsave" type="submit" class="  btn btn-info  mr-2 ">Зберегти</button>                 
                     <button zippy="editready" type="submit" class="  btn btn-success  mr-4 ">Зiбрано</button>                 
 
-                    <a zippy="editchat"  >Вiдправити запитання</a>                 
+                    <i style="cursor:pointer" title="Вiдправити запитання" zippy="editchat" class="fa fa-comments"></i>
 
  
                  </div>

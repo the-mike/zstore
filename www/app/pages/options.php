@@ -94,11 +94,7 @@ class Options extends \App\Pages\Base
 
 
         $this->add(new Form('business'))->onSubmit($this, 'saveBusinessOnClick');
-        $pt = array(
-            "1" => "По останній закупівельній ціні",
-            "2" => "Окремо по кожній закупівельній ціні"
-        );
-        $this->business->add(new DropDownChoice('partiontype', $pt, "1"));
+
         $pt = array(
             "0" => "По факту",
             "1" => "Передплата",
@@ -132,13 +128,15 @@ class Options extends \App\Pages\Base
         $this->business->add(new CheckBox('numberttn'));
         $this->business->add(new CheckBox('usecattree'));
         $this->business->add(new CheckBox('nocheckarticle'));
+        $this->business->add(new CheckBox('spreaddelivery'));
+        $this->business->add(new CheckBox('baydelivery'));
 
         $this->business->add(new TextInput('cashier'));
         $this->business->add(new TextArea('checkslogan'));
         $this->business->add(new \Zippy\Html\Form\Date('actualdate'));
 
  
-        $this->business->partiontype->setValue($common['partiontype']);
+
         $this->business->paytypein->setValue($common['paytypein']);
         $this->business->paytypeout->setValue($common['paytypeout']);
         $this->business->price1->setText($common['price1']);
@@ -157,6 +155,8 @@ class Options extends \App\Pages\Base
         $this->business->useimages->setChecked($common['useimages']);
         $this->business->numberttn->setChecked($common['numberttn']);
         $this->business->usecattree->setChecked($common['usecattree']);
+        $this->business->spreaddelivery->setChecked($common['spreaddelivery']);
+        $this->business->baydelivery->setChecked($common['baydelivery']);
         $this->business->nocheckarticle->setChecked($common['nocheckarticle']);
 
         $this->business->cashier->setText($common['cashier']);
@@ -294,11 +294,17 @@ class Options extends \App\Pages\Base
         $this->food->add(new Textinput('timesu', $food['timesu']));
         $this->food->add(new File('foodlogo'));
 
+        $menu= \App\Entity\Category::findArray('cat_name', "detail  not  like '%<nofastfood>1</nofastfood>%' and parent_id=0")  ;
+       
+        $this->food->add(new DropDownChoice('foodbasemenu',$menu,$food['foodbasemenu']));
+        $this->food->add(new DropDownChoice('foodmenu2',$menu,$food['foodmenu2']));
+
 
         //телеграм бот
 
         $this->add(new Form('tbform'))->onSubmit($this, "onBot");
-        $this->tbform->add(new TextInput('tbtoken', $common['tbtoken']));
+        $this->tbform->add(new TextInput('tbtoken', $common['tbtoken'] ?? ''));
+        $this->tbform->add(new TextInput('tbname', $common['tbname'] ?? ''));
 
 
         //источники  продаж
@@ -325,11 +331,17 @@ class Options extends \App\Pages\Base
         $this->modules->add(new CheckBox('modnote', $modules['note']));
         $this->modules->add(new CheckBox('modissue', $modules['issue']));
         $this->modules->add(new CheckBox('modwoocomerce', $modules['woocomerce']));
-        $this->modules->add(new CheckBox('modppo', $modules['ppo']));
         $this->modules->add(new CheckBox('modnp', $modules['np']));
         $this->modules->add(new CheckBox('modpromua', $modules['promua']));
-        $this->modules->add(new CheckBox('modpaperless', $modules['paperless']));
-        $this->modules->add(new CheckBox('modcheckbox', $modules['checkbox']));
+        $this->modules->add(new CheckBox('modhoroshop', $modules['horoshop']));
+        $this->modules->add(new CheckBox('modvdoc', $modules['vdoc']));
+//    
+        
+        $fisctype=0;
+        if($modules['ppo']==1) $fisctype=1;
+        if($modules['checkbox']==1) $fisctype=2;
+        if($modules['vkassa']==1) $fisctype=3;
+        $this->modules->add(new DropDownChoice('modfisctype',[], $fisctype));
 
 
 
@@ -377,7 +389,7 @@ class Options extends \App\Pages\Base
         if (!is_array($common)) {
             $common = array();
         }
-        $common['partiontype'] = $this->business->partiontype->getValue();
+
         $common['paytypein'] = $this->business->paytypein->getValue();
         $common['paytypeout'] = $this->business->paytypeout->getValue();
 
@@ -400,6 +412,8 @@ class Options extends \App\Pages\Base
         $common['usesnumber'] = $this->business->usesnumber->GetValue() ;
         $common['useimages'] = $this->business->useimages->isChecked() ? 1 : 0;
         $common['nocheckarticle'] = $this->business->nocheckarticle->isChecked() ? 1 : 0;
+        $common['spreaddelivery'] = $this->business->spreaddelivery->isChecked() ? 1 : 0;
+        $common['baydelivery'] = $this->business->baydelivery->isChecked() ? 1 : 0;
 
         $common['numberttn'] = $this->business->numberttn->isChecked() ? 1 : 0;
         $common['usecattree'] = $this->business->usecattree->isChecked() ? 1 : 0;
@@ -424,6 +438,7 @@ class Options extends \App\Pages\Base
         }
 
         $common['tbtoken'] = $sender->tbtoken->getText()  ;
+        $common['tbname'] = $sender->tbname->getText()  ;
 
         $url= _BASEURL. 'chatbot.php' ;
 
@@ -538,7 +553,11 @@ class Options extends \App\Pages\Base
 
 
     public function onFood($sender) {
-        $food = array();
+        $food = System::getOptions("food");
+        if (!is_array($food)) {
+            $food = array();
+        }
+
         $food['worktype'] = $sender->foodworktype->getValue();
         $food['pricetype'] = $sender->foodpricetype->getValue();
         $food['delivery'] = $sender->fooddelivery->isChecked() ? 1 : 0;
@@ -546,11 +565,15 @@ class Options extends \App\Pages\Base
 
         $food['pack'] = $sender->foodpack->isChecked() ? 1 : 0;
         $food['menu'] = $sender->foodmenu->isChecked() ? 1 : 0;
-        $food['name'] = $sender->goodname->getText('name') ;
-        $food['phone'] = $sender->goodphone->getText('phone') ;
-        $food['timepn'] = $sender->timepn->getText('timepn') ;
-        $food['timesa'] = $sender->timesa->getText('timesa') ;
-        $food['timesu'] = $sender->timesu->getText('timesu') ;
+        $food['name'] = $sender->goodname->getText() ;
+        $food['phone'] = $sender->goodphone->getText() ;
+        $food['timepn'] = $sender->timepn->getText() ;
+        $food['timesa'] = $sender->timesa->getText() ;
+        $food['timesu'] = $sender->timesu->getText() ;
+        $food['foodbasemenu'] = $sender->foodbasemenu->getValue() ;
+        $food['foodbasemenuname'] = $sender->foodbasemenu->getValueName() ;
+        $food['foodmenu2'] = $sender->foodmenu2->getValue() ;
+        $food['foodmenuname'] = $sender->foodmenu2->getValueName() ;
 
         $file = $sender->foodlogo->getFile();
         if (strlen($file["tmp_name"]) > 0) {
@@ -658,19 +681,22 @@ class Options extends \App\Pages\Base
         $modules['ocstore'] = $sender->modocstore->isChecked() ? 1 : 0;
         $modules['shop'] = $sender->modshop->isChecked() ? 1 : 0;
         $modules['woocomerce'] = $sender->modwoocomerce->isChecked() ? 1 : 0;
-        $modules['ppo'] = $sender->modppo->isChecked() ? 1 : 0;
         $modules['np'] = $sender->modnp->isChecked() ? 1 : 0;
         $modules['promua'] = $sender->modpromua->isChecked() ? 1 : 0;
-        $modules['paperless'] = $sender->modpaperless->isChecked() ? 1 : 0;
-        $modules['checkbox'] = $sender->modcheckbox->isChecked() ? 1 : 0;
+        $modules['horoshop'] = $sender->modhoroshop->isChecked() ? 1 : 0;
+        $modules['vdoc'] = $sender->modvdoc->isChecked() ? 1 : 0;
         $modules['issue'] = $sender->modissue->isChecked() ? 1 : 0;
         $modules['note'] = $sender->modnote->isChecked() ? 1 : 0;
 
-        if($modules['checkbox']==1 && $modules['ppo'] ==1) {
-            $this->setError('CheckBox та  вбудований ППРО не  можуть працювати  одночасно') ;
-            return;
-        }
+//        $modules['ppo'] = $sender->modppo->isChecked() ? 1 : 0;
+ //       $modules['checkbox'] = $sender->modcheckbox->isChecked() ? 1 : 0;
 
+        $fisctype = (int)$sender->modfisctype->getValue();
+   //     $modules['usefisc']   = $fisctype > 0 ? 1:0;
+        $modules['ppo']   = $fisctype == 1 ? 1:0;
+        $modules['checkbox']   = $fisctype == 2 ? 1:0;
+        $modules['vkassa']   = $fisctype == 3 ? 1:0;
+ 
         System::setOptions("modules", $modules);
         $this->setSuccess('Збережено');
         App::Redirect("\\App\\Pages\\Options");

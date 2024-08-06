@@ -83,8 +83,8 @@ class EmployeeList extends \App\Pages\Base
         $d = new \App\DateTime() ;
         $d = $d->startOfMonth()->subMonth(1) ;
 
-        $this->accp->filters->add(new Date('from', $d->getTimestamp()));
-        $this->accp->filters->add(new Date('to', time()));
+        $this->accp->filters->add(new Date('from' ));
+        $this->accp->filters->add(new Date('to',  ));
         
         $this->employeetable->employeelist->Reload();
 
@@ -113,10 +113,18 @@ class EmployeeList extends \App\Pages\Base
         $row->add(new Label('emp_name', $item->emp_name));
         $row->add(new Label('login', $item->login));
         $row->add(new Label('branch', $this->_blist[$item->branch_id] ??''));
-        //  $row->add(new Label('balance', $item->balance));
+
         $row->add(new ClickLink('edit'))->onClick($this, 'editOnClick');
         $row->add(new ClickLink('delete'))->onClick($this, 'deleteOnClick');
-        $row->add(new ClickLink('acc'))->onClick($this, 'accOnClick');
+
+        $conn = \ZDB\DB::getConnect();
+
+        $sql = "select coalesce(sum(amount),0) from empacc where   emp_id = ".$item->employee_id ;
+
+        $b = $conn->GetOne($sql);
+
+
+        $row->add(new ClickLink('acc',$this, 'accOnClick'))->setValue(''. H::fa($b));
         $row->setAttribute('style', $item->disabled == 1 ? 'color: #aaa' : null);
         
         $row->add(new ClickLink('contentlist'))->onClick($this, 'viewContentOnClick');
@@ -181,6 +189,7 @@ class EmployeeList extends \App\Pages\Base
         $this->employeedetail->setVisible(true);
         // Очищаем  форму
         $this->employeedetail->clean();
+        $this->employeedetail->edithiredate->setDate(time());
         $this->employeedetail->editlogin->setOptionList(Employee::getFreeLogins());
         $this->employeedetail->editlogin->setValue('0');
         $this->employeedetail->editztype->setValue('1');
@@ -232,10 +241,11 @@ class EmployeeList extends \App\Pages\Base
         $this->_employee->disabled = $this->employeedetail->editdisabled->isChecked() ? 1 : 0;
         if ($this->_employee->disabled == 1) {
             $u = \App\Entity\User::getByLogin($this->_employee->login);
-            $u->userpass = '';
-            $u->save();
-            $this->_employee->login = '';
-
+            if($u != null) {
+              $u->userpass = '';
+              $u->save();
+              $this->_employee->login = '';
+            }
         }
 
         $this->_employee->save();
@@ -257,31 +267,40 @@ class EmployeeList extends \App\Pages\Base
         $this->contentview->setVisible(false);
         $this->accp->setVisible(true);
         $this->accp->accname->setText($this->_employee->emp_name)  ;
+        $this->OnSubmit(null);
     }
 
     public function OnSubmit($sender) {
 
         $emp_id = $this->_employee->employee_id ;
-        $from =  $this->accp->filters->from->getDate();
-        $to =  $this->accp->filters->to->getDate();
+        $from = intval( $this->accp->filters->from->getDate() );
+        $to = intval( $this->accp->filters->to->getDate() );
 
-        $conn = \Zdb\DB::getConnect();
+        $conn = \ZDB\DB::getConnect();
 
-        $sql = "select coalesce(sum(amount),0) from empacc where optype < 100 and  emp_id = {$emp_id} and createdon < " . $conn->DBDate($from);
+        $sql = "select coalesce(sum(amount),0) from empacc_view where    emp_id = {$emp_id} and   createdon < " . $conn->DBDate($from);
 
         $b = $conn->GetOne($sql);
 
-
-        $sql =    $sql = "select * from empacc_view where optype < 100 and  emp_id = {$emp_id} and createdon <= " . $conn->DBDate($to) . " and createdon >= " . $conn->DBDate($from) ." order  by  ea_id ";
+        $tosql ="";
+        if($to > 0) {
+           $tosql = " and createdon <= " . $conn->DBDate($to)  ;          
+        }
+        
+        $sql =    $sql = "select * from empacc_view where   emp_id = {$emp_id} and createdon >= " . $conn->DBDate($from) . " {$tosql} order  by  ea_id ";
         $rc = $conn->Execute($sql);
+        $en=\App\Entity\EmpAcc::getNames();
 
         $detail = array();
 
+         
+        
         foreach ($rc as $row) {
             $in =   doubleval($row['amount']) > 0 ? $row['amount'] : 0;
             $out =   doubleval($row['amount']) < 0 ? 0-$row['amount'] : 0;
             $detail[] = array(
                 'notes'    => $row['notes'],
+                'opname'    => $en[$row['optype']],
                 'dt'    => H::fd(strtotime($row['createdon'])),
                 'doc'   => $row['document_number'],
                 'begin' => H::fa($b),
@@ -291,7 +310,7 @@ class EmployeeList extends \App\Pages\Base
             );
 
 
-            $b = $b + $in - $out;
+            $b = H::fa($b + $in - $out);
         }
 
         $this->_tvars['mempacc']  =  $detail;

@@ -60,6 +60,7 @@ class Base extends \Zippy\Html\WebPage
         $this->_tvars["wp"] = $shop["paysystem"] == 1;
         $this->_tvars["lp"] = $shop["paysystem"] == 2;
         $this->_tvars["qr"] = ($shop["paysystem"] == 3 || $shop["addqr"] ==1) ;
+        $this->_tvars["np"] = $modules['np'] == 1;
 
         $this->add(new \Zippy\Html\Form\Form('searchform'));
         $this->searchform->add(new \Zippy\Html\Form\AutocompleteTextInput('searchitem'))->onText($this, 'onSearch');
@@ -102,9 +103,15 @@ class Base extends \Zippy\Html\WebPage
             $this->_tvars['pages'][]=array('link'=> $link  ,'title'=>$p->title);
         }
 
-        if(strlen($_COOKIE['zippy_shop'] ?? null)==0) {
+        if(strlen($_COOKIE['zippy_shop'] ?? '')==0) {
             \App\Helper::insertstat(\App\Helper::STAT_HIT_SHOP, 0, 0) ;
             setcookie("zippy_shop", "visited", time() + 60 * 60 * 24);
+
+        }
+
+        if(strlen($_COOKIE['zippy_shop_unique'] ?? '')==0) {
+            \App\Helper::insertstat(\App\Helper::STAT_NEW_SHOP, 0, 0) ;
+            setcookie("zippy_shop_unique", "visited", 0);
 
         }
 

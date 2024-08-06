@@ -402,6 +402,11 @@
                ,
                sendmail:function(){
 
+                  if(confirm("Вiдправити?")==false) {
+                      return;
+                  }
+                   
+                   
                   callPageMethod(this.path +'::onMail',[this.docid], null,(data)=> 
                   {    
                       var ret = JSON.parse(data) ;
@@ -527,7 +532,7 @@
                 } ,  
                 delfile:function( id){
                     
-                   callPageMethod(this.path+'::delfile',[ id], null,(data)=> 
+                   callPageMethod(this.path+'::delfile',[ id,this.docid], null,(data)=> 
                      {
                         this.loadfiles() 
                      });

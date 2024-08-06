@@ -38,7 +38,10 @@ class GoodsIssue extends \App\Pages\Base
 
     private $_changedpos  = false;
 
-
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
@@ -72,10 +75,11 @@ class GoodsIssue extends \App\Pages\Base
 
         $this->docform->add(new TextInput('barcode'));
         $this->docform->add(new SubmitLink('addcode'))->onClick($this, 'addcodeOnClick');
-
+        
         $this->docform->add(new DropDownChoice('store', Store::getList(), H::getDefStore()));
-
+        
         $this->docform->add(new SubmitLink('addcust'))->onClick($this, 'addcustOnClick');
+        $this->docform->addcust->setVisible(       \App\ACL::checkEditRef('CustomerList',false));
 
         $this->docform->add(new AutocompleteTextInput('customer'))->onText($this, 'OnAutoCustomer');
         $this->docform->customer->onChange($this, 'OnChangeCustomer');
@@ -111,6 +115,7 @@ class GoodsIssue extends \App\Pages\Base
         $this->editdetail->edittovar->onChange($this, 'OnChangeItem', true);
 
         $this->editdetail->add(new Label('qtystock'));
+        $this->editdetail->add(new Label('qtystockex'));
         $this->editdetail->add(new Label('pricestock'));
 
         $this->editdetail->add(new Button('cancelrow'))->onClick($this, 'cancelrowOnClick');
@@ -134,18 +139,16 @@ class GoodsIssue extends \App\Pages\Base
             $this->docform->totaldisc->setText($this->_doc->headerdata['totaldisc']);
             $this->docform->edittotaldisc->setText($this->_doc->headerdata['totaldisc']);
             $this->docform->total->setText(H::fa($this->_doc->amount));
-            $this->docform->payamount->setText(H::fa($this->_doc->payamount));
+            $this->docform->payamount->setText(H::fa($this->_doc->headerdata['payamount']));
 
             $this->docform->document_date->setDate($this->_doc->document_date);
 
             $this->docform->payment->setValue($this->_doc->headerdata['payment']);
             $this->docform->salesource->setValue($this->_doc->headerdata['salesource']);
 
-            if ($this->_doc->payed == 0 && $this->_doc->headerdata['payed'] > 0) {
-                $this->_doc->payed = $this->_doc->headerdata['payed'];
-            }
-            $this->docform->editpayed->setText(H::fa($this->_doc->payed));
-            $this->docform->payed->setText(H::fa($this->_doc->payed));
+      
+            $this->docform->editpayed->setText(H::fa($this->_doc->headerdata['payed']));
+            $this->docform->payed->setText(H::fa($this->_doc->headerdata['payed']));
 
 
             $this->docform->store->setValue($this->_doc->headerdata['store']);
@@ -218,11 +221,15 @@ class GoodsIssue extends \App\Pages\Base
                             $this->_doc->headerdata['prepaid']  = abs($basedoc->payamount);
                         }
 
-
+                    
+                        
                         if($order->headerdata['store']>0) {
                             $this->docform->store->setValue($order->headerdata['store']);
-                            $order->unreserve();
                         }
+                        if($order->headerdata['payment']>0) {
+                            $this->docform->payment->setValue($order->headerdata['payment']);
+                        }
+
 
 
                         // $this->calcTotal();
@@ -235,9 +242,7 @@ class GoodsIssue extends \App\Pages\Base
                         //  $this->docform->editpayed->setText($this->docform->editpayamount->getText());
                         //   $this->docform->payed->setText($this->docform->payamount->getText());
 
-                        if($order->state == Document::STATE_INPROCESS) {
-                            $order->updateStatus(Document::STATE_READYTOSHIP);
-                        }
+
 
 
                     }
@@ -305,7 +310,7 @@ class GoodsIssue extends \App\Pages\Base
                         //$this->calcTotal();
                         //$this->calcPay();
                         $this->docform->total->setText($basedoc->amount);
-
+                        $this->calcPay();
 
                     }
                     if ($basedoc->meta_name == 'ServiceAct') {
@@ -318,6 +323,7 @@ class GoodsIssue extends \App\Pages\Base
 
                         $this->docform->customer->setKey($basedoc->customer_id);
                         $this->docform->customer->setText($basedoc->customer_name);
+                        $this->_doc->headerdata['prepaid']  = $basedoc->payed ;
 
                         // $this->docform->order->setText(  $basedoc->document_number);
 
@@ -395,6 +401,7 @@ class GoodsIssue extends \App\Pages\Base
         $this->editdetail->editprice->setText("0");
         $this->editdetail->editserial->setText("");
         $this->editdetail->qtystock->setText("");
+        $this->editdetail->qtystockex->setText("");
         $this->editdetail->pricestock->setText("");
         $this->docform->setVisible(false);
         $this->_rowid = -1;
@@ -430,9 +437,9 @@ class GoodsIssue extends \App\Pages\Base
         }
 
         $code_ = Item::qstr($code);
-        $item = Item::getFirst(" item_id in(select item_id from store_stock where store_id={$store_id}) and   (item_code = {$code_} or bar_code = {$code_})");
+        $item = Item::getFirst("  (item_code = {$code_} or bar_code = {$code_})");
 
-        if ($item == null) {
+        if ($item == null) {      //ищес оп серийномк
 
             $st = Stock::find("store_id={$store_id} and  snumber=" . $code_);
             if(count($st)==1) {
@@ -548,6 +555,7 @@ class GoodsIssue extends \App\Pages\Base
         $item->snumber = trim($this->editdetail->editserial->getText());
         $qstock = $this->editdetail->qtystock->getText();
 
+
         $item->price = $this->editdetail->editprice->getText();
         $item->disc = '';
         $item->pureprice = $item->getPurePrice();
@@ -587,7 +595,7 @@ class GoodsIssue extends \App\Pages\Base
             if($common['usesnumber'] == 3  ) {           
 
                 foreach(  $this->_itemlist as $i){
-                    if($this->_rowid == -1 &&  $item->snumber==$i->snumber )  {
+                    if($this->_rowid == -1 && strlen($item->snumber) > 0 &&  $item->snumber==$i->snumber )  {
                         $this->setError('Вже є ТМЦ  з таким серійним номером');
                         return;
                         
@@ -667,14 +675,12 @@ class GoodsIssue extends \App\Pages\Base
         }
 
         $this->_doc->payamount = $this->docform->payamount->getText();
-
+        $this->_doc->headerdata['payamount'] = $this->_doc->payamount;
         $this->_doc->payed = $this->docform->payed->getText();
+        $this->_doc->headerdata['payed'] = $this->_doc->payed;
 
 
         $this->_doc->headerdata['payment'] = $this->docform->payment->getValue();
-
-
-        $this->_doc->headerdata['payed'] = $this->docform->payed->getText();
 
 
         if ($this->checkForm() == false) {
@@ -718,17 +724,29 @@ class GoodsIssue extends \App\Pages\Base
                     $this->_doc->updateStatus(Document::STATE_WP);
                 }
                 if ($this->_doc->parent_id > 0) {   //закрываем заказ
-                    $order = Document::load($this->_doc->parent_id);
+                    $order = Document::load($this->_doc->parent_id)->cast();
 
                     if($this->_changedpos) {
                         $msg= "В документі {$this->_doc->document_number}, створеному на підставі {$order->document_number}, користувачем ".\App\System::getUser()->username." змінено перелік ТМЦ " ;
                         \App\Entity\Notify::toSystemLog($msg) ;
                     }
 
-                    if($this->_doc->payamount >0 && $order->meta_name =='Order') {
-                        if ($order->state == Document::STATE_READYTOSHIP) {
-                            $order->updateStatus(Document::STATE_CLOSED);
+                    if( $order->meta_name =='Order') {
+                        
+
+                        if($order->state == Document::STATE_INPROCESS || $order->state == Document::STATE_READYTOSHIP) {
+                            $order->updateStatus(Document::STATE_INSHIPMENT);
+                        }                            
+                        
+                        if($this->_doc->payamount >0 ) {  //если  платим  в  накладной
+                            if ($order->state == Document::STATE_INSHIPMENT) {
+                                $order->updateStatus(Document::STATE_CLOSED);
+                            }
                         }
+                        
+                        
+                        
+                        $order->unreserve();
                     }
                 }
             } else {
@@ -736,7 +754,7 @@ class GoodsIssue extends \App\Pages\Base
                 $this->_doc->updateStatus($isEdited ? Document::STATE_EDITED : Document::STATE_NEW);
             }
 
-
+ 
             $conn->CommitTrans();
 
 
@@ -756,7 +774,7 @@ class GoodsIssue extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }
@@ -789,7 +807,7 @@ class GoodsIssue extends \App\Pages\Base
         $total = 0;
 
         foreach ($this->_itemlist as $item) {
-            $item->amount = $item->price * $item->quantity;
+            $item->amount = H::fa($item->price * $item->quantity);
 
 
             $total = $total + $item->amount;
@@ -838,7 +856,7 @@ class GoodsIssue extends \App\Pages\Base
 
             $this->setError('Введіть номер документа');
         }
-
+ 
         if (false == $this->_doc->checkUniqueNumber()) {
             $next = $this->_doc->nextNumber();
             $this->docform->document_number->setText($next);
@@ -861,7 +879,9 @@ class GoodsIssue extends \App\Pages\Base
         if ($noallowfiz == 1 && $c == 0) {
             $this->setError("Не задано контрагента");
         }
-
+        if ($this->docform->payment->getValue() == 0 && $this->_doc->payed > 0) {
+            $this->setError("Якщо внесена сума більше нуля, повинна бути обрана каса або рахунок");
+        }
 
         if ($this->_doc->amount > 0 && $this->_doc->payamount > $this->_doc->payed && $c == 0) {
             $this->setError("Якщо у борг або передоплата або списання бонусів має бути обраний контрагент");
@@ -892,15 +912,18 @@ class GoodsIssue extends \App\Pages\Base
            'customer'=>$customer_id
          ));
         $qty = $item->getQuantity($store_id);
+        $qtyex = $item->getQuantity() - $qty;
 
         $this->editdetail->qtystock->setText(H::fqty($qty));
+        $this->editdetail->qtystockex->setText(H::fqty($qtyex));
+        
         $this->editdetail->editprice->setText($price);
         if ($this->_tvars["usesnumber"] == true && $item->useserial == 1) {
             $serial = $item->getNearestSerie($store_id);
             $this->editdetail->editserial->setText($serial);
         }
 
-        $price = $item->getLastPartion();
+        $price = $item->getPartion($store_id);
         $this->editdetail->pricestock->setText(H::fa($price));
 
 
@@ -933,10 +956,10 @@ class GoodsIssue extends \App\Pages\Base
             if (doubleval($d) > 0) {
                 $disctext = "Постійна знижка {$d}%";
             } else {
-                $bonus = $cust->getBonus();
-                if ($bonus > 0) {
-                    $disctext = "Нараховано бонусів {$bonus} ";
-                }
+             //   $bonus = $cust->getBonus();
+             //   if ($bonus > 0) {
+              //      $disctext = "Нараховано бонусів {$bonus} ";
+              //  }
             }
             $this->docform->custinfo->setText($disctext);
             $this->docform->custinfo->setVisible(strlen($disctext) >0);

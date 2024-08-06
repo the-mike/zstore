@@ -103,12 +103,20 @@
 <font bold="true">a</font>
 <align>center</align>
 <newline ></newline>
-<text>  {{checkslogan}}</text>    
-{{#docqrcodeurl}}
+
+{{#checkslogan}}
+<text>  {{checkslogan}}</text>
+{{/checkslogan}}
+
+{{#promo}}
+<text>  {{promo}}</text>  
+{{/promo}}  
+
+{{#isdocqrcode}}
 <font >a</font>
 <newline ></newline>
 <qrcode  > {{docqrcodeurl}}</qrcode>
-{{/docqrcodeurl}}
+{{/isdocqrcode}}
 <newline ></newline>
  
    

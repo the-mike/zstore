@@ -12,7 +12,10 @@ class Helper
 {
     public const STAT_HIT_SHOP           = 1;     //посещение  онлайн  каталога
     public const STAT_ORDER_SHOP         = 2;     //заказы  в  онлайн каталоге
-    public const STAT_VIEW_ITEM          = 3;     //перегляд  товару
+    public const STAT_VIEW_ITEM          = 3;     //просмотр товара
+    public const STAT_PROMO              = 4;     //промо код
+    public const STAT_NEW_SHOP           = 5;     //уникальнных  посетителей
+    public const STAT_CARD_SHOP          = 6;     //позиций в  корзине
 
 
     private static $meta = array(); //кеширует метаданные
@@ -82,7 +85,7 @@ class Helper
         $user = System::getUser();
         $arraymenu = array("groups" => array(), "items" => array());
 
-        $aclview = explode(',', $user->aclview);
+        $aclview = explode(',', $user->aclview ?? '');
         foreach ($rows as $meta_object) {
             $meta_id = $meta_object['meta_id'];
 
@@ -152,7 +155,7 @@ class Helper
         $rows = $conn->Execute("select *  from  metadata  where disabled <> 1 and  meta_id in ({$smartmenu})   ");
 
         $textmenu = "";
-        $aclview = explode(',', $user->aclview);
+        $aclview = explode(',', $user->aclview ?? '');
 
         foreach ($rows as $item) {
 
@@ -367,10 +370,7 @@ class Helper
         $data = file_get_contents($file['tmp_name']);
 
 
-        if($conn->dataProvider=='postgres') {
-            $data = pg_escape_bytea($data);
-
-        }
+      
         $data = $conn->qstr($data);
         $sql = "insert  into filesdata (file_id,filedata) values ({$id},{$data}) ";
         $conn->Execute($sql);
@@ -590,7 +590,7 @@ class Helper
      * @return mixed
      */
     public static function fqty($qty) {
-        if (strlen($qty) == 0) {
+        if (strlen(''.$qty) == 0) {
             return '';
         }
         if(is_numeric($qty) &&  abs($qty)<0.0005) {
@@ -603,7 +603,7 @@ class Helper
         if ($common['qtydigits'] > 0) {
             return @number_format($qty, $common['qtydigits'], '.', '');
         } else {
-            return round($qty);
+            return intval($qty);
         }
     }
 
@@ -639,7 +639,7 @@ class Helper
      * @return mixed
      */
     public static function fa($am) {
-        if (strlen($am) == 0) {
+        if (strlen(''.$am ) == 0) {
             return '';
         }
         if(is_numeric($am) && abs($am)<0.005) {
@@ -708,14 +708,14 @@ class Helper
      * @param mixed $date
      * @return mixed
      */
-    public static function fdt($date) {
+    public static function fdt($date,$seconds=false) {
         if ($date > 0) {
             $dateformat = System::getOption("common", 'dateformat');
             if (strlen($dateformat) == 0) {
                 $dateformat = 'd.m.Y';
             }
 
-            return date($dateformat . ' H:i', $date);
+            return  $seconds ? date($dateformat . ' H:i:s', $date)  : date($dateformat . ' H:i', $date) ;
         }
 
         return '';
@@ -795,8 +795,7 @@ class Helper
         }
         return 10;
     }
-
-
+ 
 
     /**
     * список валют
@@ -850,7 +849,7 @@ class Helper
 
     public static function exportExcel($data, $header, $filename) {
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-
+      
         $sheet = $spreadsheet->getActiveSheet();
 
         foreach ($header as $k => $v) {
@@ -933,6 +932,23 @@ class Helper
         die;
     }
 
+    
+    public  static  function exportExcelFromCSV($csvfile){
+
+        $reader = new \PhpOffice\PhpSpreadsheet\Reader\Csv();
+        
+        $spreadsheet= $reader->loadSpreadsheetFromFile($csvfile) ;
+        
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . "fromcsv.xlsx" . '"');
+        $writer->save('php://output');
+        die;
+
+        
+    }
+    
 
     /**
     * Получение  данных с  таблицы ключ-значение
@@ -940,7 +956,7 @@ class Helper
     * @param mixed $key
     * @return mixed
     */
-    public static function getKeyVal($key) {
+    public static function getKeyVal($key,$def="") {
         if(strlen($key)==0) {
             return;
         }
@@ -949,15 +965,25 @@ class Helper
         $ret = $conn->GetOne("select vald from  keyval  where  keyd=" . $conn->qstr($key));
 
         if(strlen($ret)==0) {
-            return "";
+            $ret= "";
         }
+        
+        if($ret==''  && $def != '') {
+            $ret = $def;
+        }
+        
         return $ret;
     }
 
-    public static function getKeyValInt($key) :int{
+    public static function getKeyValInt($key,$def=0) :int{
        
-        return intval(self::getKeyVal($key));
+        $ret = intval(self::getKeyVal($key));
+        if($ret==0  && $def != 0) {
+            $ret = $def;
+        }
+        return  $ret;
     }
+
     public static function getKeyValBool($key) : bool  {
        
         $ret = self::getKeyVal($key);
@@ -1017,20 +1043,29 @@ class Helper
      *
      * @param array $items
      */
-    public static function printItems(array $items, $pqty=0) {
+    public static function printItems(array $items, $pqty=0,array $tags=[]) {
         $printer = \App\System::getOptions('printer');
-
-
+                  
+        $prturn = \App\System::getUser()->prturn;
 
         $htmls = "";
+
+        $report = new \App\Report('item_tag.tpl');
 
         foreach ($items as $item) {
             if(intval($item->item_id)==0) {
                 continue;
             }
-            $report = new \App\Report('item_tag.tpl');
             $header = [];
-
+            $header['turn'] = '';
+            if($prturn==1) {
+                $header['turn'] = 'transform: rotate(90deg);';
+            }
+            if($prturn==2) {
+                $header['turn'] = 'transform: rotate(-90deg);';
+            }
+            
+            
             if (strlen($item->shortname) > 0) {
                 $header['name'] = $item->shortname;
             } else {
@@ -1038,8 +1073,10 @@ class Helper
             }
 
             $header['name'] = str_replace("'", "`", $header['name'])  ;
+            $header['description'] = str_replace("'", "`", $item->description)  ;
 
-
+            $header['docnumber']  =  $tags['docnumber'] ?? "";
+            
             $header['isprice']   = $printer['pprice'] == 1;
             $header['isarticle']    = $printer['pcode'] == 1;
             $header['isbarcode'] = false;
@@ -1050,6 +1087,7 @@ class Helper
             $header['garterm'] = $item->warranty;
             $header['country'] = $item->country;
             $header['brand']   = $item->manufacturer;
+            $header['notes']   = $item->notes;
 
 
             if (strlen($item->url) > 0 && $printer['pqrcode'] == 1) {
@@ -1136,13 +1174,21 @@ class Helper
      *
      * @param array $items
      */
-    public static function printItemsEP(array $items, $pqty=0) {
+    public static function printItemsEP(array $items, $pqty=0,array $tags=[]) {
+        $user = \App\System::getUser() ;
+        
+       
         $printer = \App\System::getOptions('printer');
 
         $htmls = "";
+        $rows = [];
 
+        $report = new \App\Report('item_tag_ps.tpl');
+        if($user->prtypelabel==2) {
+          $report = new \App\Report('item_tag_ts.tpl');
+        }
+        
         foreach ($items as $item) {
-            $report = new \App\Report('item_tag_ps.tpl');
             $header = [];
             if (strlen($item->shortname) > 0) {
                 $header['name'] = $item->shortname;
@@ -1150,7 +1196,9 @@ class Helper
                 $header['name'] = $item->itemname;
             }
             $header['name'] = str_replace("'", "`", $header['name'])  ;
+            $header['description'] = str_replace("'", "`", $item->description)  ;
 
+            $header['docnumber']  =  $tags['docnumber'] ?? "";
 
             $header['isprice']   = $printer['pprice'] == 1;
             $header['isarticle'] = $printer['pcode'] == 1;
@@ -1162,6 +1210,7 @@ class Helper
             $header['garterm'] = $item->warranty;
             $header['country'] = $item->country;
             $header['brand']   = $item->manufacturer;
+            $header['notes']   = $item->notes;
 
             $header['price'] = self::fa($item->getPrice($printer['pricetype']));
             if(intval($item->price) > 0) {
@@ -1212,22 +1261,54 @@ class Helper
                 $qty = $pqty;
             }
 
-            for($i=0;$i< intval($qty) ;$i++) {
-                $htmls = $htmls . $report->generate($header);
-            }
 
-            for($i=0;$i<$qty;$i++) {
-                $htmls = $htmls .   $report->generate($header) ;
-            }
-        }
+           if($user->prtypelabel==2) {
+               $header['name'] = str_replace("\"","`",$header['name']) ;
+               $header['description'] = str_replace("\"","`",$header['description']) ;
+               $header['qrcode'] = str_replace("\"","`",$header['qrcode']) ;
+               $header['brand'] = str_replace("\"","`",$header['brand']) ;
 
-        return $htmls;
+               if($user->pwsymlabel >0) {
+                   $header['name'] = mb_substr($header['name'],0,$user->pwsymlabel) ;
+               }
+               
+               
+               $text =  $report->generate($header,false);
+  
+               $r = explode("\n",$text) ;
+               
+               for($i=0;$i< intval($qty) ;$i++) {
+
+                   foreach($r as $row) {
+                       $row = str_replace("\n", "", $row);
+                       $row = str_replace("\r", "", $row);
+                       $row = trim($row);
+                       $rows[]=$row;
+                   }
+              }               
+               
+           } else {
+                for($i=0;$i< intval($qty) ;$i++) {
+                    $htmls = $htmls . $report->generate($header);
+                }
+                
+           }
+            
+           
+       }
+       if($user->prtypelabel==2) {
+         return $rows;              
+       } else {
+         return $htmls;                    
+       } 
+       
+        
     }
 
-
+    //"соль" для  шифрования
     public static function getSalt() {
         $salt= self::getKeyVal('salt');
-        if(strlen($salt)==0) {
+        if(strlen($salt ?? '')==0) {
             $salt = ''. rand(1000, 999999) ;
             self::setKeyVal('salt', $salt);
         }
@@ -1283,4 +1364,143 @@ class Helper
         return $decryption;
     }
 
+    
+    /**
+    * проверка  новой версии
+    * 
+    */
+    public static function checkVer(){
+      
+            $phpv =   phpversion()  ;
+            $conn = \ZDB\DB::getConnect();
+       
+            $nocache= "?t=" . time()."&s=". Helper::getSalt() .'&phpv='.$phpv. '_'. \App\System::CURR_VERSION ;
+       
+            $v = @file_get_contents("https://zippy.com.ua/checkver.php".$nocache);
+            $v = @json_decode($v, true);
+            if(!is_array($v)) {
+                $v = @file_get_contents("https://zippy.com.ua/version.json".$nocache);
+                $v = @json_decode($v, true);
+                
+            }
+            if (strlen($v['version']) > 0) {
+                $c = str_replace("v", "", \App\System::CURR_VERSION);
+                $n = str_replace("v", "", $v['version']);
+
+                $ca = explode('.', $c) ;
+                $na = explode('.', $n) ;
+
+                if ($na[0] > $ca[0] || $na[1] > $ca[1] || $na[2] > $ca[2]) {
+                  return $v['version'];
+                }
+
+            }       
+            
+            return '';
+    }
+    
+     /**
+     * выполняет перенос  данных на  новой  версии
+     * 
+     */
+     public static function migration() {
+           $conn = \ZDB\DB::getConnect();
+  
+           $migrationbonus = \App\Helper::getKeyVal('migrationbonus')  ; //6.11.2
+           if($migrationbonus != "done") {
+               Helper::log("Миграция бонус") ;
+               $conn->BeginTrans();
+               try{
+                  $conn->Execute("delete from custacc where optype=1 ") ;
+                  
+                  $conn->Execute("INSERT INTO custacc (amount,document_id,customer_id,optype,createdon) 
+                                  SELECT bonus,document_id, customer_id,1,paydate FROM paylist_view WHERE  paytype=1001 AND  customer_id IS NOT null;     ") ;
+
+
+               
+                  \App\Helper::setKeyVal('migrationbonus',"done") ;
+                  $conn->CommitTrans();
+            
+              } catch(\Throwable $ee) {
+                global $logger;
+                $conn->RollbackTrans();
+                System::setErrorMsg($ee->getMessage()) ;
+                $logger->error($ee->getMessage() );
+                return;            
+              }
+               
+               
+           }
+
+ 
+           $migrationbalans = \App\Helper::getKeyVal('migrationbalans')  ; //6.11.2
+           if($migrationbalans != "done") {
+               Helper::log("Миграция баланс") ;
+               //  + контрагента (active)  - наш кредитовый  долг
+               //  - контрагента (passive)  - наш дебетовый  долг
+               $conn->BeginTrans();
+               try{
+                 $conn->Execute("delete from custacc where optype=2 or optype=3 ") ;
+                
+                 $sql = "SELECT
+                          COALESCE(SUM((CASE WHEN (d.meta_name IN ('InvoiceCust', 'GoodsReceipt', 'IncomeService')) THEN d.payed WHEN ((d.meta_name = 'OutcomeMoney') AND
+                              (d.content LIKE '%<detail>2</detail>%')) THEN d.payed WHEN (d.meta_name = 'RetCustIssue') THEN d.payamount ELSE 0 END)), 0) AS s_passive,
+                          COALESCE(SUM((CASE WHEN (d.meta_name IN ('IncomeService', 'GoodsReceipt')) THEN d.payamount WHEN ((d.meta_name = 'IncomeMoney') AND
+                              (d.content LIKE '%<detail>2</detail>%')) THEN d.payed WHEN (d.meta_name = 'RetCustIssue') THEN d.payed ELSE 0 END)), 0) AS s_active,
+                          COALESCE(SUM((CASE WHEN (d.meta_name IN ('GoodsIssue', 'TTN', 'PosCheck', 'OrderFood', 'ServiceAct')) THEN d.payamount WHEN ((d.meta_name = 'OutcomeMoney') AND
+                              (d.content LIKE '%<detail>1</detail>%')) THEN d.payed WHEN (d.meta_name = 'ReturnIssue') THEN d.payed ELSE 0 END)), 0) AS b_passive,
+                          COALESCE(SUM((CASE WHEN (d.meta_name IN ('GoodsIssue', 'Order', 'PosCheck', 'OrderFood', 'Invoice', 'ServiceAct')) THEN d.payed WHEN ((d.meta_name = 'IncomeMoney') AND
+                              (d.content LIKE '%<detail>1</detail>%')) THEN d.payed WHEN (d.meta_name = 'ReturnIssue') THEN d.payamount ELSE 0 END)), 0) AS b_active,
+                          d.customer_id , d.document_id
+                        FROM documents_view d
+                        WHERE d.state NOT IN (0, 1, 2, 3, 15, 8, 17)
+                        AND d.customer_id > 0 
+                      
+                        GROUP BY d.customer_id,d.document_id order  by d.document_id";        
+                                   
+                 foreach($conn->Execute($sql) as $row){
+                     $s_active = doubleval($row['s_active']) ;
+                     $s_passive = doubleval($row['s_passive']) ;
+                     $b_active = doubleval($row['b_active']) ;
+                     $b_passive = doubleval($row['b_passive']) ;
+
+                   //  if($s_active != $s_passive) {
+                         if($s_active > 0) {
+                             $conn->Execute("insert into custacc (customer_id,document_id,optype,amount) values ({$row['customer_id']},{$row['document_id']},3,{$s_active})  ") ;                     
+                         }
+                         if($s_passive > 0) {
+                             $s_passive = 0-$s_passive;
+                             $conn->Execute("insert into custacc (customer_id,document_id,optype,amount) values ({$row['customer_id']},{$row['document_id']},3,{$s_passive})  ") ;                     
+                         }
+                    // }
+                   //  if($b_active != $b_passive) {
+                     
+                         if($b_active > 0) {
+                             $conn->Execute("insert into custacc (customer_id,document_id,optype,amount) values ({$row['customer_id']},{$row['document_id']},2,{$b_active})  ") ;                     
+                         }
+                         if($b_passive > 0) {
+                             $b_passive = 0-$b_passive;
+                             $conn->Execute("insert into custacc (customer_id,document_id,optype,amount) values ({$row['customer_id']},{$row['document_id']},2,{$b_passive})  ") ;                     
+                         }
+                   //  }                                          
+                     
+                     
+                 }                  
+                   
+                  \App\Helper::setKeyVal('migrationbalans',"done") ;
+                  $conn->CommitTrans();
+       
+                } catch(\Throwable $ee) {
+                    global $logger;
+                    $conn->RollbackTrans();
+                    System::setErrorMsg($ee->getMessage()) ;
+                    $logger->error($ee->getMessage() );
+                    return;            
+                }     
+           }
+           
+           
+            
+     }
+    
 }

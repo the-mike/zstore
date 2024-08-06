@@ -129,7 +129,7 @@ class Items extends \App\Pages\Base
 
     public function exportOnSubmit($sender) {
         $modules = System::getOptions("modules");
-        $cat = $this->exportform->ecat->getValue();
+//        $cat = $this->exportform->ecat->getValue();
 
         $elist = array();
         foreach ($this->_items as $item) {
@@ -147,12 +147,12 @@ class Items extends \App\Pages\Base
             $this->setError('Не обрано товар');
             return;
         }
-        $data = json_encode($elist);
+        $data = json_encode($elist, JSON_UNESCAPED_UNICODE);
 
 
 
         try {
-            $data = Helper::make_request("GET", "/api/v1/products/edit", $data);
+            $data = Helper::make_request("POST", "/api/v1/products/import_file", $data);
         } catch(\Exception $ee) {
             System::setErrorMsg($ee->getMessage());
             return;
@@ -223,7 +223,7 @@ class Items extends \App\Pages\Base
             }
         }
 
-        $data = json_encode($list);
+        $data = json_encode($list, JSON_UNESCAPED_UNICODE);
 
 
 
@@ -294,7 +294,7 @@ class Items extends \App\Pages\Base
             }
         }
 
-        $data = json_encode($list);
+        $data = json_encode($list, JSON_UNESCAPED_UNICODE);
 
 
 
@@ -380,12 +380,7 @@ class Items extends \App\Pages\Base
                     $image = new \App\Entity\Image();
                     $image->content = $im;
                     $image->mime = $imagedata['mime'];
-                    $conn =   \ZDB\DB::getConnect();
-                    if($conn->dataProvider=='postgres') {
-                        $image->thumb = pg_escape_bytea($image->thumb);
-                        $image->content = pg_escape_bytea($image->content);
-
-                    }
+             
 
                     $image->save();
                     $item->image_id = $image->image_id;

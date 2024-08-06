@@ -45,22 +45,28 @@ class CronTask extends \ZCL\DB\Entity
         if(!System::useCron()) {
             return;
         }
-
+        
+ 
+        $options = System::getOptions('common');
+        $modules = System::getOptions('modules');
+       
+        
         $last = intval( \App\Helper::getKeyVal('lastcron') );
         if((time()-$last) < self::MIN_INTERVAL) { //не  чаще  раза в пять минут
             return;
         }
-        $stop = \App\Helper::getKeyVal('stopcron')  ?? false;
-        if($stop== false) { //уже  запущен
+        $start = \App\Helper::getKeyVal('lastcron')  ?? 0 ;
+        $stop = \App\Helper::getKeyVal('stopcron')  ?? '' ;
+        if($start >0 &&  $stop=== 'false') { //уже  запущен
             return;
         }
         \App\Helper::setKeyVal('lastcron', time()) ;
-        \App\Helper::setKeyVal('stopcron', false) ;
+        \App\Helper::setKeyVal('stopcron', 'false') ;
 
         try {
             $conn = \ZDB\DB::getConnect()  ;
 
-            //задачи каждый  при  каждом  вызове
+            //задачи    при  каждом  вызове
 
             self::doQueue();
 
@@ -79,9 +85,47 @@ class CronTask extends \ZCL\DB\Entity
                 //очищаем  уведомления
                 $dt = $conn->DBDate(strtotime('-1 month', time())) ;
                 $conn->Execute("delete  from notifies  where  dateshow < ". $dt) ;
+                  
+                
+                //очистка товаров у поставщика
+                $days = H::getKeyValint('CI_optclean') ;
+                if($days >0) {
+                    $conn->Execute("delete from custitems where  updatedon <  ". $conn->DBDate( strtotime("-{$days} day"))  ) ;
+                }
 
+                
+            }
+            
+            //задачи  раз  в месяц
+            $last =  intval(\App\Helper::getKeyVal('lastcronm'));
+            if(date('m') != date('m', $last)) {
+                \App\Helper::setKeyVal('lastcronm', time()) ;
+
+                //очищаем статистику
+                $dt = $conn->DBDate(strtotime('-1 month', time())) ;
+                $conn->Execute("delete  from stats  where category in (1,2,3,5,6) and  dt < ". $dt) ;
+                $conn->Execute(" OPTIMIZE TABLE stats  " ) ;
+                   
+                //обновление  НП
+                if($modules['np'] == 1) {
+                    $api = new  \App\Modules\NP\Helper();
+
+                    $ret = $api->updatetCache()  ;
+                   
+                    if(strlen($ret['error'] ??'')>0 ) {
+                       $logger->error($ret['error']);  
+                    }
+                    if(strlen($ret['warn'] ??'')>0 ) {
+                       $logger->warn($ret['warn']);                           
+                       
+                    }           
+                }    
+                
+        
+                
             }
 
+            
         } catch(\Exception $ee) {
             $msg = $ee->getMessage();
             $logger->error($msg);
@@ -98,23 +142,23 @@ class CronTask extends \ZCL\DB\Entity
             }
 
         }
-        \App\Helper::setKeyVal('stopcron', true) ;
+        \App\Helper::setKeyVal('stopcron', 'true') ;
 
 
     }
 
     public static function doQueue($task_id=0) {
         global $logger;
-        $ok=true;
+     
         $ret="";
-        $conn=\Zdb\DB::getConnect() ;
+        $conn=\ZDB\DB::getConnect() ;
 
         $where =" starton <= NOW() "  ;
         if($task_id >0 ) {
             $where = " id = ". $task_id    ;        
         }
         
-        $queue = CronTask::find( $where , "id asc", 25) ;
+        $queue = CronTask::findYield($where , "id asc" ) ;
         foreach($queue as $task) {
             try {
                 $done = false;
@@ -148,12 +192,21 @@ class CronTask extends \ZCL\DB\Entity
 
                       
                     if($msg['type']=='ppro') {
-                       \App\Modules\PPO\PPOHelper::autoshift($msg['pos_id'])  ;
+                       $b=  \App\Modules\PPO\PPOHelper::autoshift($msg['pos_id'])  ;
                     }
                     if($msg['type']=='cb') {
-                       \App\Modules\CB\CheckBox::autoshift($msg['pos_id']) ;
+                       $b=  \App\Modules\CB\CheckBox::autoshift($msg['pos_id']) ;
                     }
-                
+                    if(!$b) {
+                        $admin = \App\Entity\User::getByLogin('admin');
+
+                        $n = new  Notify();
+                        $n->user_id =  $admin->user_id;
+                        $n->sender_id =  Notify::SYSTEM;
+
+                        $n->message = "Помилка  автоматичного закриття змiни";
+                        $n->save();          
+                    }
                     
                     $done = true;
                 }
@@ -161,18 +214,17 @@ class CronTask extends \ZCL\DB\Entity
 
                 if($done) {
                    CronTask::delete($task->id) ;
-                }
+                }   
             } catch(\Exception $e) {
                 $msg = $e->getMessage();
                 $logger->error($msg);
-                $ok = false;   
+                $task->starton +=  (12 *3600) ;
+                $task->save() ;//откладываем
+                
             }    
 
         }
-
-        if(!$ok) {
-            throw new \Exception("Cron  error. see log") ;
-        }
+         
     }
     public static function getTypes() {
         $ret=[];

@@ -118,12 +118,13 @@ class Invoice extends \App\Entity\Doc\Document
             }
         }
 
+        $this->DoBalans() ;
 
         return true;
     }
 
     protected function getNumberTemplate() {
-        return 'РФ-000000';
+        return 'РО-000000';
     }
 
     public function getRelationBased() {
@@ -132,7 +133,7 @@ class Invoice extends \App\Entity\Doc\Document
         //  $list['Invoice'] = self::getDesc('Invoice');
         $list['TTN'] = self::getDesc('TTN');
         $list['ServiceAct'] = self::getDesc('ServiceAct');
-        $list['POSCheck'] = self::getDesc('POSCheck');
+   //     $list['POSCheck'] = self::getDesc('POSCheck');
 
         return $list;
     }
@@ -162,4 +163,24 @@ class Invoice extends \App\Entity\Doc\Document
         return array(self::EX_EXCEL, self::EX_PDF, self::EX_MAIL);
     }
 
+    /**
+    * @override
+    */
+    public function DoBalans() {
+         $conn = \ZDB\DB::getConnect();
+         $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
+
+                
+       //платежи       
+        foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where paytype < 1000 and   coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = $p['amount'];
+            $b->createdon = strtotime($p['paydate']);
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+             
+    }
 }

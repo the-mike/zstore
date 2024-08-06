@@ -40,18 +40,25 @@ class ProductView extends Base
 
         $options = \App\System::getOptions('shop');
         $this->_tvars['usefeedback'] = $options['usefeedback'] == 1;
-
+    
         $this->add(new Label("breadcrumb", Helper::getBreadScrumbs($product->cat_id), true));
         $this->add(new ClickLink('backtolist', $this, 'OnBack'));
 
         $this->_title = $product->itemname;
         // $this->_description = $product->getDescription();
 
-        $this->add(new \Zippy\Html\Link\BookmarkableLink('product_image'))->setValue("/loadshopimage.php?id={$product->image_id}");
+        $this->add(new \Zippy\Html\Link\BookmarkableLink('product_image'));
+//        $this->add(new \Zippy\Html\Link\BookmarkableLink('product_image'))->setValue("/loadshopimage.php?id={$product->image_id}");
         $this->product_image->setAttribute('href', "/loadshopimage.php?id={$product->image_id}");
 
+        $this->product_image->add( new  \Zippy\Html\Image('product_imageimg'))->setUrl("/loadshopimage.php?id={$product->image_id}");
+        
         $this->add(new Label('productname', $product->itemname));
         $this->add(new Label('productcode', $product->item_code));
+   
+ 
+        
+        $this->add(new Label('customsize',  $product->customsize));
         $this->add(new Label('onstore'));
         $this->add(new Label('action'))->setVisible(false);
         $this->add(new \Zippy\Html\Label('manufacturername', $product->manufacturer))->SetVisible(strlen($product->manufacturer) > 0);
@@ -78,7 +85,7 @@ class ProductView extends Base
 
         $form = $this->add(new \Zippy\Html\Form\Form('formcomment'));
         $form->onSubmit($this, 'OnComment');
-        $form->add(new TextInput('nick'));
+        $form->add(new TextInput('starnick'));
         $form->add(new TextInput('rating'));
         $form->add(new TextArea('comment'));
         $form->add(new TextInput('capchacode'));
@@ -107,7 +114,11 @@ class ProductView extends Base
         $imglist = array();
 
         foreach ($product->getImages(true) as $id) {
-            $imglist[] = \App\Entity\Image::load($id);
+            $img = \App\Entity\Image::load($id);
+            if($img != null) {
+               $imglist[] = \App\Entity\Image::load($id);    
+            }
+            
         }
         $this->add(new DataView('imagelist', new ArrayDataSource($imglist), $this, 'imglistOnRow'))->Reload();
         $this->_tvars['islistimage'] = count($imglist) > 1;
@@ -176,6 +187,12 @@ class ProductView extends Base
         if ($item->hasData() == false) {
             $value = $nodata;
         }
+        
+        if($item->attributetype == 5 && strpos($value,'http') === 0 ) {
+            $link ="<a href=\"{$value}\" target=\"_blank\" >{$value}</a>";
+            $datarow->add(new Label("attrvalue", $link,true));            
+            return;
+        }
         $datarow->add(new Label("attrvalue", $value));
     }
 
@@ -216,13 +233,13 @@ class ProductView extends Base
 
         $comment = new \App\Modules\Shop\Entity\ProductComment();
         $comment->item_id = $this->item_id;
-        $comment->author = $this->formcomment->nick->getText();
-        $comment->comment = $this->formcomment->comment->getText();
+        $comment->author = $this->formcomment->starnick->getText();
+        $comment->comment = $this->formcomment->starcomment->getText();
         $comment->rating = $this->formcomment->rating->getText();
         $comment->created = time();
         $comment->save();
-        $this->formcomment->nick->setText('');
-        $this->formcomment->comment->setText('');
+        $this->formcomment->starnick->setText('');
+        $this->formcomment->starcomment->setText('');
         $this->formcomment->rating->setText('0');
         $this->clist = ProductComment::findByProduct($this->item_id);
         $this->commentlist->Reload();

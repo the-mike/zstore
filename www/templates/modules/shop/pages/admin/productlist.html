@@ -126,7 +126,7 @@
                             <input  accept="image/png,image/jpeg" zippy="photo" type="file" class="form-control mr-2">
 
                             <input type="submit" class="btn btn-success   " value="Додати">
-                            <small>Зображення має  бути  приблизно  квадратним</small>
+                            <small>Зображення має  бути  приблизно  квадратним та з розміром  файлу  не більше 1M</small>
                         </form>
 
                         <div class="w-100">
@@ -152,12 +152,7 @@
                     lang: 'uk-UA',
 
                     callbacks: {
-                        onEnter: function (e) {
-                            if (e.keyCode === key.code.ENTER) {
-                                e.shiftKey = true;
-                                context.triggerEvent('enter', e);
-                            }
-                        },
+                 
                         onPaste: function (e) {
 
                             var bufferText = ((e.originalEvent || e).clipboardData || window.clipboardData).getData('Text');

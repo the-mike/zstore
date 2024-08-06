@@ -32,9 +32,16 @@ class ServiceAct extends \App\Pages\Base
     private $_doc;
     private $_basedocid   = 0;
 
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
+        
+        $this->add(new \App\Widgets\ItemList("itemsel"))->init();
+        
         $common = System::getOptions("common");
 
         if ($docid > 0) {    //загружаем   содержимое  документа на страницу
@@ -96,14 +103,8 @@ class ServiceAct extends \App\Pages\Base
 
                     }
                 }
-
-
             }
         }
-
-
-
-
     }
 
     public function loaddata($args, $post) {
@@ -150,6 +151,7 @@ class ServiceAct extends \App\Pages\Base
                'desc'=>$ser->desc ,
                'price'=>H::fa($ser->price) ,
                'disc'=>$ser->disc ,
+               'msr'=>$ser->msr ,
                'pureprice'=>$ser->pureprice ,
 
                'quantity'=>H::fqty($ser->quantity) ,
@@ -167,6 +169,7 @@ class ServiceAct extends \App\Pages\Base
                'item_code'=>$item->item_code ,
                'price'=>H::fa($item->price) ,
                'disc'=>$item->disc ,
+               'msr'=>$item->msr ,
                'snumber'=>$item->snumber ,
                'pureprice'=>$item->pureprice ,
 
@@ -273,11 +276,12 @@ class ServiceAct extends \App\Pages\Base
 
 
                 if ($post->op == 'execdoc' || $post->op == 'paydoc') {
+                    
+                    $this->_doc->headerdata['timeentry'] = time();
                     $this->_doc->updateStatus(Document::STATE_INPROCESS);
-
                 }
-                if($this->_doc->payamount > $this->_doc->payed &&   $post->op == 'paydoc') {
-                    $this->_doc->updateStatus(Document::STATE_WP);
+                if (  $post->op == 'paydoc') {
+                     $this->_doc->updateStatus(Document::STATE_WP);
                 }
 
 
@@ -294,7 +298,7 @@ class ServiceAct extends \App\Pages\Base
             if ($isEdited == false) {
                 $this->_doc->document_id = 0;
             }
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
 
             return json_encode(['error'=>$ee->getMessage()], JSON_UNESCAPED_UNICODE);
 

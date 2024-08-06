@@ -31,7 +31,11 @@ class ProdReceipt extends \App\Pages\Base
     private $_basedocid = 0;
     private $_rowid     = 0;
 
-
+    /**
+    * @param mixed $docid      редактирование
+    * @param mixed $basedocid  создание на  основании
+    * @param mixed $st_id      этап  производства
+    */
     public function __construct($docid = 0, $basedocid = 0, $st_id = 0) {
         parent::__construct();
 
@@ -41,7 +45,7 @@ class ProdReceipt extends \App\Pages\Base
         $this->add(new Form('docform'));
         $this->docform->add(new TextInput('document_number'));
         $this->docform->add(new Date('document_date'))->setDate(time());
-        $this->docform->add(new DropDownChoice('parea', \App\Entity\Prodarea::findArray("pa_name", ""), 0));
+        $this->docform->add(new DropDownChoice('parea', \App\Entity\ProdArea::findArray("pa_name", ""), 0));
         $this->docform->add(new DropDownChoice('store', Store::getList(), H::getDefStore()));
 
         $this->docform->add(new TextArea('notes'));
@@ -89,26 +93,27 @@ class ProdReceipt extends \App\Pages\Base
 
                         $this->_itemlist = $basedoc->unpackDetails('detaildata');
                     }
-                }
-                if ($basedoc instanceof Document) {
-                    $this->_basedocid = $basedocid;
                     if ($basedoc->meta_name == 'Order') {
+                        $this->docform->notes->setText('Замовлення ' . $basedoc->document_number);
+                        
                         foreach ($basedoc->unpackDetails('detaildata') as $item) {
-                            $item->price = $item->getLastPartion();
+                            $item->price = $item->getProdprice($this->_doc->headerdata['store'],"",true);
                             $this->_itemlist[] = $item;
                         }
 
                     }
-                }
-                if ($basedoc->meta_name == 'Task') {
+                    if ($basedoc->meta_name == 'Task') {
 
-                    $this->docform->notes->setText('Наряд ' . $basedoc->document_number);
-                    $this->docform->parea->setValue($basedoc->headerdata['parea']);
+                        $this->docform->notes->setText('Наряд ' . $basedoc->document_number);
+                        $this->docform->parea->setValue($basedoc->headerdata['parea']);
 
-                    foreach ($basedoc->unpackDetails('prodlist') as $item) {
-                        $item->price = $item->getProdprice();
-                        $this->_itemlist[] = $item;
+                        foreach ($basedoc->unpackDetails('prodlist') as $item) {
+                            $item->price = $item->getProdprice();
+                            $this->_itemlist[] = $item;
+                        }
                     }
+              
+                    
                 }
             }
 
@@ -293,7 +298,7 @@ class ProdReceipt extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
         App::Redirect("\\App\\Pages\\Register\\StockList");

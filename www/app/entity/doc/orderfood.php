@@ -40,7 +40,16 @@ class OrderFood extends Document
 
         $common = \App\System::getOptions('common');
 
-        $firm = H::getFirmData($this->firm_id);
+        $firm = H::getFirmData($this->firm_id, $this->branch_id);
+        $pos = \App\Entity\Pos::load($this->headerdata['pos']) ;
+        if(strlen($pos->pointname) >0) {
+           $shopname=$pos->pointname ;   
+        }
+        if(strlen($pos->address) >0) {
+           $firm["address"]=$pos->address ;   
+        }
+     
+     
         $deliverydata = "";
         $deliverydata = $this->headerdata["delivery_name"];
         if ($this->headerdata["delivery"] > 1) {
@@ -62,7 +71,7 @@ class OrderFood extends Document
                         "contact"   => $this->headerdata["contact"],
                         "exchange"        => H::fasell($this->headerdata["exchange"]),
                         "pos_name"        => $this->headerdata["pos_name"],
-                        "time"            => H::fdt($this->headerdata["time"]),
+                        "time"            => H::fdt($this->headerdata["time"],true),
                         "document_number" => $this->document_number,
                         "total"           => H::fasell($this->amount),
                         "bonus"           => H::fa($this->headerdata["bonus"] >0) ? H::fa($this->headerdata["bonus"]) : false,
@@ -78,7 +87,7 @@ class OrderFood extends Document
         return $html;
     }
 
-    public function generatePosReport($ps=false) {
+    public function generatePosReport($ps=false,$bill=false) {
 
         $detail = array();
 
@@ -97,6 +106,16 @@ class OrderFood extends Document
         $common = \App\System::getOptions('common');
 
         $firm = H::getFirmData($this->firm_id, $this->branch_id);
+   
+        $pos = \App\Entity\Pos::load($this->headerdata['pos']) ;
+        if(strlen($pos->pointname) >0) {
+           $shopname=$pos->pointname ;   
+        }
+        if(strlen($pos->address) >0) {
+           $firm["address"]=$pos->address ;   
+        }
+   
+   
         $addbonus = $this->getBonus() ;
         $delbonus = $this->getBonus(false) ;
         $allbonus = 0 ;
@@ -107,20 +126,21 @@ class OrderFood extends Document
 
         $header = array('date'            => H::fd($this->document_date),
                         "_detail"         => $detail,
+                        "ischeck"         => !$bill ,
                         "username"        => $this->headerdata['cashier'] ,
                         "firm_name"       => $firm["firm_name"],
-                        "shopname"        => strlen($common["shopname"]) > 0 ? $common["shopname"] : false,
+                        "shopname"        => strlen($shopname) > 0 ? $shopname : false,
                         "address"         => $firm["address"],
                         "phone"           => $firm["phone"],
                         "inn"             => strlen($firm["inn"]) >0 ? $firm["inn"] : false,
                         "tin"             => strlen($firm["tin"]) >0 ? $firm["tin"] : false,
                         "checkslogan"     => $common["checkslogan"],
                         "customer_name"   => strlen($this->customer_name) > 0 ? $this->customer_name : false,
-                        "fiscalnumber"  => strlen($this->headerdata["fiscalnumber"]) > 0 ? $this->headerdata["fiscalnumber"] : false,
-                        "fiscalnumberpos"  => strlen($this->headerdata["fiscalnumberpos"]) > 0 ? $this->headerdata["fiscalnumberpos"] : false,
+                        "fiscalnumber"  => strlen($this->headerdata["fiscalnumber"]??'') > 0 ? $this->headerdata["fiscalnumber"] : false,
+                        "fiscalnumberpos"  => strlen($this->headerdata["fiscalnumberpos"]??'') > 0 ? $this->headerdata["fiscalnumberpos"] : false,
                         "exchange"        => H::fasell($this->headerdata["exchange"]),
                         "pos_name"        => $this->headerdata["pos_name"],
-                        "time"            => H::fdt($this->headerdata["time"]),
+                        "time"            => H::fdt($this->headerdata["time"],true),
                         "document_number" => $this->document_number,
                         "total"           => H::fasell($this->amount),
                         "payed"           => H::fasell($this->headerdata['payed']),
@@ -144,7 +164,26 @@ class OrderFood extends Document
             $i=  rand(0, count($frases) -1)  ;
             $header['checkslogan']   =   $frases[$i];
         }
-
+        if(strlen($header['checkslogan'] ??'') ==0) {
+            $header['checkslogan']  = false;
+        }
+        //промокод
+        $pc = \App\Entity\PromoCode::find('type=2 and disabled <> 1','id desc') ;
+        foreach($pc as $p) {
+           
+           if($p->dateto >0 && $p->dateto < time() ) {
+               continue;               
+           }
+           if($p->showcheck==1) {
+               $header['promo']  = 'Промокод '. $p->code . " на {$p->disc}% знижку";
+               breack; 
+           }
+        }  
+           
+           
+        if(strlen($header['promo']  ??'') ==0) {
+            $header['promo']  = false;
+        }
 
         if($ps) {
             $report = new \App\Report('doc/orderfood_bill_ps.tpl');
@@ -173,6 +212,13 @@ class OrderFood extends Document
 
 
     public function DoPayment() {
+        
+        $conn = \ZDB\DB::getConnect();
+        $conn->Execute("delete from paylist where document_id =" . $this->document_id);
+        $conn->Execute("delete from iostate where iotype = 50 AND document_id=" . $this->document_id);
+        $conn->Execute("delete from empacc  where  document_id=" . $this->document_id);
+        
+        
         if ($this->headerdata['payment'] > 0 && $this->payed > 0) {
 
 
@@ -184,14 +230,24 @@ class OrderFood extends Document
             }
 
 
-            $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $payed, $this->headerdata['payment']);
-            if ($payed > 0) {
-                $this->payed = $payed;
-            }
+            $this->payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $payed, $this->headerdata['payment']);
+          
+            $this->DoBalans() ;
 
             \App\Entity\IOState::addIOState($this->document_id, $this->payed, \App\Entity\IOState::TYPE_BASE_OUTCOME);
+          //бонус  сотруднику
 
-
+            $disc = \App\System::getOptions("discount");
+            $emp_id = \App\System::getUser()->employee_id ;
+            if($emp_id >0 && $disc["bonussell"] >0) {
+                $b =  $this->amount * $disc["bonussell"] / 100;
+                $ua = new \App\Entity\EmpAcc();
+                $ua->optype = \App\Entity\EmpAcc::BONUS;
+                $ua->document_id = $this->document_id;
+                $ua->emp_id = $emp_id;
+                $ua->amount = $b;
+                $ua->save();
+            }
         }
     }
 
@@ -199,7 +255,7 @@ class OrderFood extends Document
 
         $conn = \ZDB\DB::getConnect();
         $conn->Execute("delete from entrylist where document_id =" . $this->document_id);
-        $conn->Execute("delete from iostate where document_id=" . $this->document_id);
+        $conn->Execute("delete from iostate where iotype = 81 AND document_id=" . $this->document_id);
 
 
         foreach ($this->unpackDetails('detaildata') as $item) {
@@ -230,8 +286,6 @@ class OrderFood extends Document
                             $k = 1 / (1 - $itemp->lost / 100);
                             $itemp->quantity = $itemp->quantity * $k;
                             $lost = $k - 1;
-
-
                         }
 
 
@@ -243,6 +297,8 @@ class OrderFood extends Document
                             $sc->tag=Entry::TAG_TOPROD;
 
                             $sc->save();
+                            
+                             
                             if ($lost > 0) {
                                 $io = new \App\Entity\IOState();
                                 $io->document_id = $this->document_id;
@@ -251,7 +307,7 @@ class OrderFood extends Document
 
                                 $io->save();
 
-                            }
+                            }    
 
                         }
                     }
@@ -312,5 +368,34 @@ class OrderFood extends Document
 
         return false;
     }
+ 
+    /**
+    * @overrride
+    */
+    public function DoBalans() {
+         $conn = \ZDB\DB::getConnect();
+         $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
 
+              
+         if($this->payamount >0) {
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = 0-$this->payamount;
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+      //платежи       
+        foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where  paytype < 1000 and coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = $p['amount'];
+            $b->createdon = strtotime($p['paydate']);
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+        
+        
+    }
 }

@@ -7,6 +7,7 @@ use App\Entity\Customer;
 use App\Entity\Category;
 use App\Entity\Item;
 use App\Entity\Service;
+use App\Entity\PromoCode;
 use App\Helper as H;
 use App\System;
 use Zippy\Html\DataList\DataView;
@@ -37,16 +38,20 @@ class Discounts extends \App\Pages\Base
         if (false == \App\ACL::checkShowSer('Discounts')) {
             return;
         }
+        //кнопки
         $this->add(new ClickLink('tabo', $this, 'onTab'));
         $this->add(new ClickLink('tabc', $this, 'onTab'));
         $this->add(new ClickLink('tabi', $this, 'onTab'));
-
         $this->add(new ClickLink('tabs', $this, 'onTab'));
+        $this->add(new ClickLink('tabp', $this, 'onTab'));
+        $this->add(new ClickLink('tabe', $this, 'onTab'));
+        //панели
         $this->add(new Panel('otab'));
         $this->add(new Panel('ctab'));
         $this->add(new Panel('itab'));
-
         $this->add(new Panel('stab'));
+        $this->add(new Panel('ptab'));
+        $this->add(new Panel('etab'));
 
         $this->onTab($this->tabo);
 
@@ -70,6 +75,31 @@ class Discounts extends \App\Pages\Base
         $form->add(new  TextInput("bonus4", $disc["bonus4"]));
         $form->add(new  TextInput("summa4", $disc["summa4"]));
 
+    //покупатели
+        $this->otab->add(new Form('pbfilter'))->onSubmit($this, 'OnPBAdd');
+        $this->otab->pbfilter->add(new AutocompleteTextInput('pbsearchkey'))->onText($this, 'OnAutoCustomer');
+        $this->otab->pbfilter->add(new TextInput('pbsearchbon'));
+        
+
+ 
+        $this->otab->add(new DataView('pblist', new BonusCustomerDataSource($this), $this, 'bcustomerlistOnRow'));
+        $this->otab->pblist->setPageSize(H::getPG());
+        $this->otab->add(new \Zippy\Html\DataList\Paginator('pbpag', $this->otab->pblist));
+
+        $this->otab->pblist->Reload();
+        
+     //бонусы      
+        $this->otab->add(new Form('blfilter'))->onSubmit($this, 'OnPL');
+        $this->otab->blfilter->add(new TextInput('blsearch'));
+      
+        $this->otab->add(new DataView('listbon', new BonusListCustomerDataSource($this), $this, 'bcustomerlistBOnRow'));
+        $this->otab->listbon->setPageSize(25);
+        $this->otab->add(new \Zippy\Html\DataList\Paginator('lbpag', $this->otab->listbon));
+        $this->otab->add(new Label('sumbonuses','0'));
+        
+        $this->Onpl($this->otab->blfilter);
+
+        
         $form = $this->ctab->add(new  Form("discform"));
         $form->onSubmit($this, "onDisc");
 
@@ -153,6 +183,46 @@ class Discounts extends \App\Pages\Base
         $this->itab->add(new \Zippy\Html\DataList\Paginator('iopag', $this->itab->iolist));
         $this->itab->iolist->Reload();
 
+      //проимокоды
+        $this->ptab->add(new Panel('listpan')) ;
+        
+        $this->ptab->listpan->add(new Form('pfilter'))->onSubmit($this,"onFilterPromo");
+        $this->ptab->listpan->pfilter->add(new TextInput('psearchkey'));
+
+        $this->ptab->listpan->add(new ClickLink('pcodeadd'))->onClick($this,"onAddPromo");
+
+        $this->ptab->listpan->add(new DataView('plist', new PromoDataSource($this), $this, 'promolistOnRow'));
+        $this->ptab->listpan->plist->setPageSize(H::getPG());
+        $this->ptab->listpan->add(new \Zippy\Html\DataList\Pager('ppag', $this->ptab->listpan->plist));
+     //   $this->ptab->listpan->plist->Reload();
+        
+        $this->ptab->add(new Panel('formpan'))->setVisible(false) ;
+        $this->ptab->formpan->add(new Form('pform'))->onSubmit($this,"savePCode") ;
+        $this->ptab->formpan->pform->add(new ClickLink('cancelpadd'))->onClick($this,"cancelPCode") ;
+        $this->ptab->formpan->pform->add(new TextInput('peditcode'));
+        $this->ptab->formpan->pform->add(new Date('peditdate'));
+        $this->ptab->formpan->pform->add(new TextInput('peditdisc'));
+        $this->ptab->formpan->pform->add(new TextInput('peditbonus'))->setVisible(false);
+
+        $this->ptab->formpan->pform->add(new AutocompleteTextInput('peditcust'))->onText($this, 'OnAutoCustomer');
+        $this->ptab->formpan->pform->peditcust->setVisible(false);
+        $this->ptab->formpan->pform->add(new CheckBox('peditcheck'));
+        $this->ptab->formpan->pform->peditcheck->setVisible(false);
+
+        $this->ptab->formpan->pform->add(new DropDownChoice('paddtype'))->onChange($this,"onPType") ;
+        $this->ptab->listpan->plist->Reload();
+
+        // сотрулники
+        $form = $this->etab->add(new Form('empform'));
+        $form->onSubmit($this, "onEmp");
+
+        $form->add(new  TextInput("ebonussell", $disc["bonussell"] ??''));
+        $form->add(new  TextInput("efineret", $disc["fineret"]??''));
+ 
+        $this->add(new Form('formaddbc'))->onSubmit($this, 'onAddBonus');
+        $this->formaddbc->add(new  TextInput("amountbc",''));
+        $this->formaddbc->add(new AutocompleteTextInput('custbc'))->onText($this, 'OnAutoCustomer');
+          
     }
 
 
@@ -201,12 +271,17 @@ class Discounts extends \App\Pages\Base
         $this->_tvars['tabibadge'] = $sender->id == 'tabi' ? "badge badge-dark  badge-pill " : "badge badge-light  badge-pill  ";
 
         $this->_tvars['tabsbadge'] = $sender->id == 'tabs' ? "badge badge-dark  badge-pill " : "badge badge-light  badge-pill  ";
+        $this->_tvars['tabpbadge'] = $sender->id == 'tabp' ? "badge badge-dark  badge-pill " : "badge badge-light  badge-pill  ";
+        $this->_tvars['tabebadge'] = $sender->id == 'tabe' ? "badge badge-dark  badge-pill " : "badge badge-light  badge-pill  ";
+
 
         $this->ctab->setVisible($sender->id == 'tabc');
         $this->otab->setVisible($sender->id == 'tabo');
         $this->itab->setVisible($sender->id == 'tabi');
 
         $this->stab->setVisible($sender->id == 'tabs');
+        $this->ptab->setVisible($sender->id == 'tabp');
+        $this->etab->setVisible($sender->id == 'tabe');
 
     }
 
@@ -262,10 +337,84 @@ class Discounts extends \App\Pages\Base
 
     }
 
+    public function OnPBAdd($sender) {
+        $c = \App\Entity\Customer::load($sender->pbsearchkey->getKey());
+        if ($c == null) {
+            return;
+        }
+        $d = $sender->pbsearchbon->getText();
+        if ($d > 0) {
+            $c->pbonus = $d;
+            $c->save();
+            $this->otab->pblist->Reload();
+        }
+        $sender->clean();
+        
+
+        $this->setSuccess('Збережено');
+        $this->goAnkor('pbsearchkey') ;
+
+    }   
+   
+    public function bcustomerlistOnRow($row) {
+        $c = $row->getDataItem();
+        $row->add(new  Label("pbname", $c->customer_name));
+        $row->add(new  Label("pbphone", $c->phone));
+        $row->add(new  Label("pbbonus", $c->pbonus));
+        $row->add(new  ClickLink('pbdel'))->onClick($this, 'pbdeleteOnClick');
+
+    }
+    
+    public function pbdeleteOnClick($sender) {
+        $c = $sender->owner->getDataItem();
+        $c->pbonus = 0;
+        $c->save();
+        $this->otab->pblist->Reload();
+    }
+   
     public function OnAutoCustomer($sender) {
         return Customer::getList($sender->getText(), 1);
     }
+     
+     //список  бонусоы ц контрагентов
+    public function OnPL($sender) {
+      
+        $this->otab->listbon->Reload();
+        $conn= \ZDB\DB::getConnect()  ;
+        $t = trim($this->otab->blfilter->blsearch->getText());
 
+
+        $where = ""  ;
+        if(strlen($t) > 0)  {
+            $where .= "   customer_name like   " . Customer::qstr( '%'.$t.'%' ) .' and ' ;
+        }        
+        $on =  $conn->GetOne( "select sum(amount) from custacc_view  where {$where} optype=1  and  amount>0 " );
+        $off = $conn->GetOne( "select sum(amount) from custacc_view  where {$where}  optype=1  and  amount<0 " );
+        $this->otab->sumbonuses->setText($on +$off ); 
+
+    }   
+  
+    public function bcustomerlistBOnRow($row) {
+        $c = $row->getDataItem();
+        $row->add(new  Label("lbname", $c->customer_name));
+        $row->add(new  Label("lbphone", $c->phone));
+        
+        $blist=$c->getBonuses();
+        
+        $sum=0;
+        $table="";
+        foreach($blist as $b){
+           $sum = $sum+ $b->bonus;   
+           $table = $table . "<tr><td>".  H::fd($b->paydate)."</td>";   
+           $table = $table . "<td>".  $b->document_number ."</td>";   
+           $table = $table . "<td class=\"text-right\">".  $b->bonus ."</td></tr>";   
+        }
+        
+        $row->add(new  Label("lbbonus", $sum));
+        $row->add(new  Label("lbdetail", $table,true));
+
+
+    }
 
     //услуги
     public function OnSAdd($sender) {
@@ -519,8 +668,158 @@ class Discounts extends \App\Pages\Base
     }
 
 
+    //промо 
+    public function onFilterPromo($rsender) {
+       $this->ptab->listpan->plist->Reload();
+    }
 
+    public function promolistOnRow($row) {
+        $p = $row->getDataItem();
+ 
+        $row->add(new  Label("pcode", $p->code));
+        $type="";
+        if($p->type==1) $type="Одноразовий";
+        if($p->type==2) $type="Багаторазовий";
+        if($p->type==3) $type="Персональний";
+        if($p->type==4) $type="Реферальний";
 
+        $row->add(new  Label("ptype", $type));
+        $row->add(new  Label("pdisc", $p->disc));
+        if($p->type==4) {
+           $row->pdisc->setText( $p->disc . " (бонус {$p->refbonus})" );     
+        }
+        $row->add(new  Label("pused", $p->used));
+        $row->add(new  Label("pcust", $p->customer_name));
+        if($p->type==2){                                                                            
+                                                                                       
+           $q = Customer::findCnt("customer_id in (select customer_id from documents where content like '%<promocode><![CDATA[{$p->code}]]></promocode>%') ") ;
+           if($q > 0) {
+              $row->pcust->setText("Використали {$q}  ");    
+           }
+           
+        }    
+        
+        $row->add(new  Label("pdateto", $p->dateto > 0 ? H::fd($p->dateto) :''));
+        $row->add(new  ClickLink('pdel'))->onClick($this, 'pdeleteOnClick');
+        
+        if($p->dateto > 0 && $p->dateto < time()) {
+           $p->disabled = 1;
+        }
+        $row->setAttribute('style', $p->disabled == 1 ? 'color: #aaa' : null);
+        $row->pdel->setVisible($p->disabled == 0) ;
+
+    }
+    
+    public function pdeleteOnClick($sender) {
+        $p = $sender->owner->getDataItem();
+        $code = PromoCode::load($p->id);
+
+        if(strlen($code->used)==0){
+            PromoCode::delete($p->id);            
+        } else {
+           $code->disabled=1;
+           $code->save() ;   
+        }
+
+        $this->ptab->listpan->plist->Reload();
+
+    }
+   
+   
+    public function onAddPromo($sender) {
+        $code=PromoCode::generate() ;
+        $this->ptab->formpan->pform->clean();        
+        $this->ptab->formpan->pform->peditcode->setText($code);
+        $this->ptab->formpan->pform->peditcust->setText('');
+        $this->ptab->formpan->pform->peditcust->setKey(0);
+        $this->ptab->formpan->pform->peditcheck->setChecked(false);
+        $this->ptab->formpan->pform->paddtype->setValue(0);
+        
+        $this->ptab->formpan->setVisible(true);
+        $this->ptab->listpan->setVisible(false);
+ 
+    }
+    public function cancelPCode($sender) {
+        $this->ptab->formpan->setVisible(false);
+        $this->ptab->listpan->setVisible(true);
+ 
+    }
+    public function onPType($sender) {
+        $t=$sender->getValue();
+        $this->ptab->formpan->pform->peditcust->setVisible($t>2);
+        $this->ptab->formpan->pform->peditcheck->setVisible($t==2);
+        $this->ptab->formpan->pform->peditbonus->setVisible($t==4);
+
+ 
+    }
+    public function savePCode($sender) {
+        
+        $pc = new PromoCode() ;
+        $pc->code = $sender->peditcode->getText() ;
+        $pc->type = $sender->paddtype->getValue() ;
+        if($pc->type==0) {
+            $this->setError('Не вказано тип') ;
+            return;
+        }
+        $pc->disc = $sender->peditdisc->getText();
+        $pc->refbonus =  $sender->peditbonus->getText();
+        $pc->dateto = $sender->peditdate->getDate();
+        if($pc->dateto >0 && $pc->dateto < time()) {
+           $this->setError('Неправильна дата') ;
+           return; 
+
+        }
+
+  
+        $pc->customer_id = (int)$sender->peditcust->getKey();
+        if($pc->type >2 && $pc->customer_id ==0 ) {
+           $this->setError('Не вибрано контрагента') ;
+           return; 
+        }
+        $pc->customer_name = $sender->peditcust->getText();
+        $pc->showcheck = $sender->peditcheck->isChecked() ? 1:0  ;
+        
+        $pc->save() ;
+        
+        $this->ptab->listpan->plist->Reload();
+        $this->ptab->formpan->setVisible(false);
+        $this->ptab->listpan->setVisible(true);
+ 
+    }
+
+    public function onEmp($sender) {
+        $disc = System::getOptions("discount");
+   
+
+        $disc["fineret"] = $sender->efineret->getText();
+        $disc["bonussell"] = $sender->ebonussell->getText();
+
+        System::setOptions("discount", $disc);
+        $this->setSuccess('Збережено');
+    }
+  
+    public function onAddBonus($sender) {
+        
+        $am=intval($sender->amountbc->getText() );
+        $cid=intval($sender->custbc->getKey() );
+        $sender->amountbc->setText('') ;
+        $sender->custbc->setText('') ;
+        $sender->custbc->setKey(0) ;
+         
+        if($am != 0  && $cid >0) {
+             
+            $cb = new \App\Entity\CustAcc();
+
+            $cb->customer_id = $cid;
+          //  $cb->document_id = $this->document_id;
+            $cb->amount =    $am;
+            $cb->optype = \App\Entity\CustAcc::BONUS;
+            $cb->createdon = time();
+            $cb->save();
+            
+            $this->OnPL(null);
+        }
+    }
 
 }
 
@@ -541,6 +840,78 @@ class DiscCustomerDataSource implements \Zippy\Interfaces\DataSource
 
         $where .= "   and detail   like  '%<discount>%' ";
 
+        return $where;
+    }
+
+    public function getItemCount() {
+        return Customer::findCnt($this->getWhere());
+    }
+
+    public function getItems($start, $count, $sortfield = null, $asc = null) {
+
+        return Customer::find($this->getWhere(), "customer_name ", $count, $start);
+    }
+
+    public function getItem($id) {
+
+    }
+
+}
+
+class BonusCustomerDataSource implements \Zippy\Interfaces\DataSource
+{
+    private $page;
+
+    public function __construct($page) {
+        $this->page = $page;
+    }
+
+    private function getWhere() {
+
+        $conn = \ZDB\DB::getConnect();
+
+
+        $where = "status = 0 and detail not like '%<type>2</type>%' and detail not like '%<isholding>1</isholding>%'     ";
+
+        $where .= "   and detail   like  '%<pbonus>%' ";
+
+        return $where;
+    }
+
+    public function getItemCount() {
+        return Customer::findCnt($this->getWhere());
+    }
+
+    public function getItems($start, $count, $sortfield = null, $asc = null) {
+
+        return Customer::find($this->getWhere(), "customer_name ", $count, $start);
+    }
+
+    public function getItem($id) {
+
+    }
+
+}
+
+class BonusListCustomerDataSource implements \Zippy\Interfaces\DataSource
+{
+    private $page;
+
+    public function __construct($page) {
+        $this->page = $page;
+    }
+
+    private function getWhere() {
+
+        $conn = \ZDB\DB::getConnect();
+
+        $t = trim($this->page->otab->blfilter->blsearch->getText());
+
+  
+        $where = " status = 0  and customer_id in ( select customer_id  from custacc   where optype=1 group by customer_id having sum(amount)  <>0 ) ";
+        if(strlen($t) > 0)  {
+            $where .= " and customer_name like   " . Customer::qstr( '%'.$t.'%' );
+        }
         return $where;
     }
 
@@ -648,6 +1019,42 @@ class DiscItemODataSource implements \Zippy\Interfaces\DataSource
 
     public function getItems($start, $count, $sortfield = null, $asc = null) {
         return Item::find($this->getWhere(), "itemname ", $count, $start);
+    }
+
+    public function getItem($id) {
+
+    }
+
+}
+
+class PromoDataSource implements \Zippy\Interfaces\DataSource
+{
+    private $page;
+
+    public function __construct($page) {
+        $this->page = $page;
+    }
+
+    private function getWhere() {
+
+        $conn = \ZDB\DB::getConnect();
+
+        $where = "1=1 ";
+
+        $text = trim($this->page->ptab->listpan->pfilter->psearchkey->getText());
+        if(strlen($text)>0) {
+            $where = $where . " and code = ".$conn->qstr($text);
+        }
+        
+        return $where;
+    }
+
+    public function getItemCount() {
+        return PromoCode::findCnt($this->getWhere());
+    }
+
+    public function getItems($start, $count, $sortfield = null, $asc = null) {
+        return PromoCode::find($this->getWhere(), " disabled, id desc ", $count, $start);
     }
 
     public function getItem($id) {

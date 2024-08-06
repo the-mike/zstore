@@ -36,7 +36,11 @@ class OrderFood extends \App\Pages\Base
 
     private $_prevcust = 0;   // преыдущий контрагент
 
-    public function __construct($docid = 0, $basedocid = 0) {
+     /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
+   public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
         $this->add(new Form('docform'));
@@ -349,8 +353,6 @@ class OrderFood extends \App\Pages\Base
         }
 
         $pos = \App\Entity\Pos::load($this->_doc->headerdata['pos']);
-
-
 
         $isEdited = $this->_doc->document_id > 0;
         if ($isEdited == false) {

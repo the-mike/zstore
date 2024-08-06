@@ -310,12 +310,13 @@ try {
             $neworder->headerdata['ocorder'] = $shoporder->order_id;
             $neworder->headerdata['ocorderback'] = 0;
             $neworder->headerdata['pricetype'] = 'price1';
+            $neworder->headerdata['store'] = \App\Helper::getDefStore();
 
             $neworder->notes = "OC номер:{$shoporder->order_id};";
 
             $neworder->headerdata['occlient'] = $shoporder->firstname . ' ' . $shoporder->lastname;
             $neworder->notes .= " Клієнт:" . $shoporder->firstname . ' ' . $shoporder->lastname . ";";
-
+            $cust= null;
             if ($shoporder->customer_id > 0 && $modules['ocinsertcust'] == 1) {
                 $cust = \App\Entity\Customer::getFirst("detail like '%<shopcust_id>{$shoporder->customer_id}</shopcust_id>%'");
                 if ($cust == null) {
@@ -360,6 +361,52 @@ try {
         echo  "<br>Імпортовано {$i} замовлень ";
     }
 
+  //обновление  статусов
+    if(true) {
+  
+        
+        $status = -1;
+        foreach($statuses as  $k=>$v) {
+            if($v=="Доставлено") {  // статус  опенкарте  
+                $status = $k;
+            }
+        }
+        if($status == -1) {
+            $logger->error("Не знайдено статус " . $status_name);
+            return;
+        }        
+        
+        $eorders = \App\Entity\Doc\Document::find("meta_name='Order' and content like '%<ocorderback>0</ocorderback>%' and state <> " . \App\Entity\Doc\Document::STATE_NEW);
+        $elist = array();
+        foreach ($eorders as $order) {
+            $elist[$order->headerdata['ocorder']] = $status; 
+        } 
+      
+        $data = json_encode($elist);
+        $fields = array(
+            'data' => $data
+        );
+        $url = $site . '/index.php?route=api/zstore/updateorder&' . $token;
+        $json = \App\Modules\OCStore\Helper::do_curl_request($url, $fields);
+        if ($json === false) {
+            return;
+        }
+        $data = json_decode($json, true);
+
+
+        if ($data['error'] != "") {
+            $logger->error($data['error']);
+            return;
+        }      
+        foreach ($eorders as $order) {
+             $order->headerdata['ocorderback'] = 1;
+             $order->save();
+        }
+     
+      
+   }    
+    
+    
     die;
 
 } catch (Exception $e) {

@@ -37,6 +37,7 @@ class Options extends \App\Pages\Base
         $this->shop->add(new DropDownChoice('shopordertype', array(), 0));
 
 
+        $this->shop->add(new DropDownChoice('shopdefuser', \App\Entity\User::findArray('username','disabled<>1','username')));
         $this->shop->add(new DropDownChoice('shopdefpricetype', \App\Entity\Item::getPriceTypeList()));
         $this->shop->add(new DropDownChoice('shopdefbranch', \App\Entity\Branch::getList()));
         $this->shop->add(new TextInput('email'));
@@ -52,8 +53,11 @@ class Options extends \App\Pages\Base
         $this->shop->add(new CheckBox('nouseimages'));
         $this->shop->add(new CheckBox('noshowempty'));
 
+
         $this->shop->add(new DropDownChoice('salesource', \App\Helper::getSaleSources(), "0"));
         $this->shop->add(new DropDownChoice('firm', \App\Entity\Firm::findArray("firm_name", "disabled <>1"), "0"));
+        $this->shop->add(new DropDownChoice('defmf',\App\Entity\MoneyFund::getList(), $modules['ocmf']??0));
+
 
 
         $this->add(new Form('pay'))->onSubmit($this, 'savePayOnClick');
@@ -76,9 +80,15 @@ class Options extends \App\Pages\Base
         if (!is_array($this->_pages)) {
             $this->_pages = array();
         }
+        if (intval($shop['defuser'] ??0) ==0) {
+            $admin=\App\Entity\User::getByLogin('admin') ;
+            $shop['defuser']   = $admin->user_id;
+        }
 
+        $this->shop->shopdefuser->setValue($shop['defuser']);
         $this->shop->shopdefbranch->setValue($shop['defbranch']);
         $this->shop->shopordertype->setValue($shop['ordertype']);
+        $this->shop->defmf->setValue($shop['defmf']);
         $this->shop->shopdefpricetype->setValue($shop['defpricetype']);
         $this->shop->salesource->setValue($shop['salesource']);
         $this->shop->firm->setValue($shop['firm']);
@@ -86,6 +96,7 @@ class Options extends \App\Pages\Base
         $this->shop->uselogin->setChecked($shop['uselogin']);
         $this->shop->usefilter->setChecked($shop['usefilter']);
         $this->shop->noshowempty->setChecked($shop['noshowempty']);
+
 
         $this->shop->usefeedback->setChecked($shop['usefeedback']);
         $this->shop->usemainpage->setChecked($shop['usemainpage']);
@@ -153,9 +164,11 @@ class Options extends \App\Pages\Base
         }
 
 
+        $shop['defuser'] = $this->shop->shopdefuser->getValue();
         $shop['defbranch'] = $this->shop->shopdefbranch->getValue();
         $shop['ordertype'] = $this->shop->shopordertype->getValue();
         $shop['defpricetype'] = $this->shop->shopdefpricetype->getValue();
+        $shop['defmf'] = $this->shop->defmf->getValue();
         $shop['salesource'] = $this->shop->salesource->getValue();
         $shop['firm'] = $this->shop->firm->getValue();
         $shop['email'] = $this->shop->email->getText();
@@ -170,6 +183,12 @@ class Options extends \App\Pages\Base
         $shop['usemainpage'] = $this->shop->usemainpage->isChecked() ? 1 : 0;
         $shop['nouseimages'] = $this->shop->nouseimages->isChecked() ? 1 : 0;
         $shop['noshowempty'] = $this->shop->noshowempty->isChecked() ? 1 : 0;
+
+        if(intval($shop['defbranch'])==0 &&  $this->_tvars["usebranch"]==true) {
+            $this->setError('Не вказана філія');
+            return;
+        }
+        
 
         $file = $sender->logo->getFile();
         if (strlen($file["tmp_name"]) > 0) {

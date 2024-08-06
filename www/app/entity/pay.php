@@ -12,8 +12,10 @@ namespace App\Entity;
 class Pay extends \ZCL\DB\Entity
 {
     //  const PAY_CUSTOMER = 1;   //расчеты  с  контрагентм
-    public const PAY_BANK     = 1000;   //эквайринг
-    public const PAY_BONUS    = 1001;   //бонусы
+    public const PAY_BANK       = 1000;   //эквайринг
+ //   public const PAY_BONUS      = 1001;   //бонусы
+    public const PAY_DELIVERY   = 1002;   //доставка
+    public const PAY_COMISSION  = 1003;   //комиссия
 
 
     protected function init() {
@@ -45,17 +47,19 @@ class Pay extends \ZCL\DB\Entity
      * @param mixed $amount сумма
      * @param mixed $mf денежный счет
      * @param mixed $comment коментарий
+     * @param mixed $nobank  без банковского  процента 
      */
     public static function addPayment($document_id, $paydate, $amount, $mf_id, $comment = '', $nobank=false) {
-
-        self::addBonus($document_id, $amount);
+        $doc = \App\Entity\Doc\Document::load($document_id);
+ 
+        \App\Entity\CustAcc::addBonus($doc, $amount);
 
         if (0 == (float)$amount || 0 == (int)$document_id || 0 == $mf_id) {
-            return;
+            return 0;
         }
 
         if ($mf_id == 0) {
-            return;
+            return 0;
         }
 
         $mf = \App\Entity\MoneyFund::load($mf_id);
@@ -70,7 +74,7 @@ class Pay extends \ZCL\DB\Entity
         }
 
 
-        $pay = new \App\Entity\Pay();
+        $pay = new Pay();
         $pay->mf_id = $mf_id;
         $pay->document_id = $document_id;
         $pay->amount = $amount;
@@ -87,28 +91,53 @@ class Pay extends \ZCL\DB\Entity
 
             if ($mf->beznal == 1 && $nobank==false) {
                 if (($mf->btran > 0 && $amount < 0) || ($mf->btranin > 0 && $amount > 0)) {
-                    $amount = abs($amount);
-                    $payb = new \App\Entity\Pay();
+
+                    $payb = new Pay();
                     $payb->mf_id = $mf_id;
                     $payb->document_id = $document_id;
-                    if ($mf->btran > 0) {
-                        $payb->amount = 0 - ($amount * $mf->btran / 100);
-                    }
-                    if ($mf->btranin > 0) {
-                        $payb->amount = 0 - ($amount * $mf->btranin / 100);
-                    }
                     $payb->paytype = Pay::PAY_BANK;
                     $payb->paydate = $paydate;
                     $payb->notes = 'Банківський процент за транзакцію';
                     $payb->user_id = \App\System::getUser()->user_id;
-                    $payb->save();
 
-                    \App\Entity\IOState::addIOState($document_id, 0-$payb->amount, \App\Entity\IOState::TYPE_BANK);
+                    if ( $doc->meta_name=='ReturnIssue' && $mf->back == 1 ) {    //возврат
+                        if (  $mf->btranin > 0  && $amount < 0) {    //возврат
+                            $payb->amount =  (abs($amount) * $mf->btranin / 100);
+                            \App\Entity\IOState::addIOState($document_id, $payb->amount, \App\Entity\IOState::TYPE_OTHER_INCOME);                        
+                        }
+                    } else {
+                        
+                        if ($mf->btran > 0  && $amount < 0) {    //со  счета
+                            $payb->amount = 0- (abs($amount) * $mf->btran / 100);
+                        }
+                        if ($mf->btranin > 0 && $amount > 0) {  //на  счет
+                            $payb->amount = 0- (abs($amount) * $mf->btranin / 100);
+                        }
+                        \App\Entity\IOState::addIOState($document_id, $payb->amount, \App\Entity\IOState::TYPE_BANK);                        
+                    }
+                    if($payb->amount != 0) {
+                        $payb->save();          
+                    }                                
 
 
                 }
             }
 
+            //комиссия
+            if ($mf->com > 0  && $amount >0){
+                    $payc = new Pay();
+                    $payc->mf_id = $mf_id;
+                    $payc->document_id = $document_id;
+                    $payc->paytype = Pay::PAY_COMISSION;
+                    $payc->paydate = $paydate;
+                    $payc->notes = 'Комісія';
+                    $payc->user_id = \App\System::getUser()->user_id;
+                    $payc->amount = 0- ($amount * $mf->com / 100);                    
+                    $payc->save(); 
+ 
+                    \App\Entity\IOState::addIOState($document_id, $payc->amount, \App\Entity\IOState::TYPE_SALE_OUTCOME);                        
+                    
+            }
 
         }
 
@@ -119,7 +148,7 @@ class Pay extends \ZCL\DB\Entity
         $sql = "select coalesce(abs(sum(amount)),0) from paylist_view where paytype < 1000  and  document_id=" . $document_id;
         $payed = $conn->GetOne($sql);
         $conn->Execute("update documents set payed={$payed} where   document_id =" . $document_id);
-        return $payed;
+        return doubleval( $payed);
     }
 
     public static function cancelPayment($id, $comment) {
@@ -129,7 +158,7 @@ class Pay extends \ZCL\DB\Entity
         }
 
         $doc = \App\Entity\Doc\Document::load($pl->document_id);
-
+        //сторно
         $pay = new \App\Entity\Pay();
         $pay->mf_id = $pl->mf_id;
 
@@ -145,162 +174,5 @@ class Pay extends \ZCL\DB\Entity
         $pay->save();
     }
 
-    //начисление  (списание)  бонусов
-    public static function addBonus($document_id, $amount =0) {
-
-        $conn = \Zdb\DB::getConnect();
-
-        $customer_id = (int)$conn->GetOne("select  customer_id  from  documents where  document_id=" . $document_id);
-        if($customer_id ==0) {
-            return;
-        }
-        $c = \App\Entity\Customer::load($customer_id);
-        $doc = \App\Entity\Doc\Document::load($document_id);
-        if($doc->headerdata['pricetype'] != 'price1') {
-            return;
-        }
-
-
-        $pastbonus = intval($doc->getBonus());
-        if($pastbonus != 0) {
-            return; //уже  начисленые
-        }
-
-        if($doc->meta_name == 'ReturnIssue') { //возврат
-
-            if($doc->parent_id == 0) {
-                return;
-            }
-            $parent = \App\Entity\Doc\Document::load($doc->parent_id);
-            $parentbonus = intval($parent->getBonus());
-
-            if($parentbonus==0) {
-                return;
-            }
-            if($parent->headerdata['exch2b'] > 0) {
-                $parentbonus = $parentbonus - $parent->headerdata['exch2b'];
-            }
-            $k = 1 - ($parent->amount - $doc->amount) / $parent->amount;
-
-            $retbonus = intval($parentbonus * $k) ;// доля
-
-            if($retbonus > 0) {
-                $pay = new \App\Entity\Pay();
-
-                $pay->document_id = $document_id;
-                $pay->bonus = 0 -  $retbonus;
-                $pay->paytype = self::PAY_BONUS;
-                $pay->paydate = time();
-                $pay->user_id = \App\System::getUser()->user_id;
-
-                $pay->save();
-
-            }
-
-            return;
-        }
-
-        if(in_array($doc->meta_name, ['GoodsIssue','ServiceAct','Invoice','POSCheck','Order','OrderFood']) == false) {
-            return;
-        }
-
-        $bonus = 0;
-
-        if ($doc->headerdata['bonus'] > 0) { //списание
-
-
-            $pay = new \App\Entity\Pay();
-
-            $pay->document_id = $document_id;
-            $pay->bonus = 0 -  $doc->headerdata['bonus'];
-            $pay->paytype = self::PAY_BONUS;
-            $pay->paydate = time();
-            $pay->user_id = \App\System::getUser()->user_id;
-
-            $pay->save();
-
-            // return;
-        }
-
-
-
-        //сдачу в  бонусы
-        if($doc->headerdata['exch2b'] > 0 && $doc->headerdata['exchange']>0) {
-            if($doc->headerdata['exch2b'] > $doc->headerdata['exchange']) {
-                $doc->headerdata['exch2b'] = $doc->headerdata['exchange']  ;
-            }
-
-
-            $pay = new \App\Entity\Pay();
-
-            $pay->document_id = $document_id;
-
-            $pay->amount = 0;
-            $pay->bonus = (int)$doc->headerdata['exch2b'];
-            if($doc->headerdata['exch2b'] > $doc->headerdata['exchange']) {
-                $pay->bonus = (int)$doc->headerdata['exchange'];
-            }
-            $pay->paytype = \App\Entity\Pay::PAY_BONUS;
-            $pay->paydate = time();
-            $pay->user_id = \App\System::getUser()->user_id;
-
-            $pay->save();
-        }
-
-
-
-        if (doubleval($c->getDiscount()) > 0) { //если    скидка бонусы  не  начисляем
-            return;
-        }
-
-        $bonus = 0;
-        if($doc->payamount >0 && $amount > $doc->payamount) {
-            $amount= $doc->payamount;
-        }
-        if($amount==0) {
-            return;
-        }
-
-        $disc = \App\System::getOptions("discount");
-
-        $cnt = (int)$conn->GetOne("select  count(*)  from paylist_view where  customer_id=" . $customer_id);
-
-        if ($cnt == 0 && doubleval($disc["firstbay"]) > 0) {   //первая  покупка
-            $bonus = round($amount * doubleval($disc["firstbay"] / 100));
-        } else {
-
-
-            if ($disc["summa1"] > 0 && $disc["bonus1"] > 0 && $disc["summa1"] < $amount) {
-                $bonus = round($amount * $disc["bonus1"] / 100);
-            }
-            if ($disc["summa2"] > 0 && $disc["bonus2"] > 0 && $disc["summa2"] < $amount) {
-                $bonus = round($amount * $disc["bonus2"] / 100);
-            }
-            if ($disc["summa3"] > 0 && $disc["bonus3"] > 0 && $disc["summa3"] < $amount) {
-                $bonus = round($amount * $disc["bonus3"] / 100);
-            }
-            if ($disc["summa4"] > 0 && $disc["bonus4"] > 0 && $disc["summa4"] < $amount) {
-                $bonus = round($amount * $disc["bonus4"] / 100);
-            }
-        }
-
-        if ($bonus > 0) {
-
-
-            $pay = new \App\Entity\Pay();
-
-            $pay->document_id = $document_id;
-
-
-            $pay->amount = 0;
-            $pay->bonus = (int)$bonus;
-            $pay->paytype = self::PAY_BONUS;
-            $pay->paydate = time();
-            $pay->user_id = \App\System::getUser()->user_id;
-
-            $pay->save();
-
-        }
-    }
-
+ 
 }

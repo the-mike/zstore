@@ -31,6 +31,10 @@ class ReturnIssue extends \App\Pages\Base
     private $_basedocid = 0;
     private $_rowid     = 0;
 
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
         if ($docid == 0 && $basedocid == 0) {
@@ -47,7 +51,7 @@ class ReturnIssue extends \App\Pages\Base
         $this->docform->add(new AutocompleteTextInput('customer'))->onText($this, 'OnAutoCustomer');
 
         $this->docform->add(new TextInput('notes'));
-        $this->docform->add(new DropDownChoice('payment', MoneyFund::getList(), H::getDefMF()));
+        $this->docform->add(new DropDownChoice('payment', MoneyFund::getList(), 0));
 
         $this->docform->add(new DropDownChoice('pos', \App\Entity\Pos::findArray('pos_name', "details like '%<usefisc>1</usefisc>%' "), 0));
 
@@ -59,6 +63,7 @@ class ReturnIssue extends \App\Pages\Base
 
         $this->docform->add(new Label('total'));
         $this->docform->add(new Label('discount'));
+        $this->docform->add(new Label('bonus'));
         $this->docform->add(new Label('payamount'));
         $this->docform->add(new TextInput('editpayed', "0"));
         $this->docform->add(new SubmitButton('bpayed'))->onClick($this, 'onPayed');
@@ -85,17 +90,16 @@ class ReturnIssue extends \App\Pages\Base
 
             $this->docform->notes->setText($this->_doc->notes);
             $this->docform->payment->setValue($this->_doc->headerdata['payment']);
-            if ($this->_doc->payed == 0 && $this->_doc->headerdata['payed'] > 0) {
-                $this->_doc->payed = $this->_doc->headerdata['payed'];
-            }
-            $this->docform->editpayed->setText(H::fa($this->_doc->payed));
-            $this->docform->payed->setText(H::fa($this->_doc->payed));
+
+            $this->docform->editpayed->setText(H::fa($this->_doc->headerdata['payed']));
+            $this->docform->payed->setText(H::fa($this->_doc->headerdata['payed']));
 
             $this->docform->total->setText(H::fa($this->_doc->amount));
             $this->docform->payamount->setText(H::fa($this->_doc->payamount));
 
             $this->_itemlist = $this->_doc->unpackDetails('detaildata');
 
+            $this->_basedocid = $this->_doc->parent_id;
 
 
 
@@ -157,10 +161,10 @@ class ReturnIssue extends \App\Pages\Base
 
                     }
                 }
-                $this->calcTotal();
+                
             }
         }
-
+        $this->calcTotal();
         $this->docform->add(new DataView('detail', new \Zippy\Html\DataList\ArrayDataSource(new \Zippy\Binding\PropertyBinding($this, '_itemlist')), $this, 'detailOnRow'))->Reload();
         if (false == \App\ACL::checkShowDoc($this->_doc)) {
             return;
@@ -277,9 +281,6 @@ class ReturnIssue extends \App\Pages\Base
             $customer = Customer::load($this->_doc->customer_id);
             $this->_doc->headerdata['customer_name'] = $this->docform->customer->getText();
         }
-        if ($this->checkForm() == false) {
-            return;
-        }
 
 
         $firm = H::getFirmData($this->_doc->firm_id, $this->branch_id);
@@ -294,8 +295,15 @@ class ReturnIssue extends \App\Pages\Base
         $this->_doc->payamount = $this->docform->payamount->getText();
 
         $this->_doc->payed = $this->docform->payed->getText();
-        $this->_doc->headerdata['payed'] = $this->docform->payed->getText();
+        $this->_doc->headerdata['payed'] = $this->_doc->payed;
+        $this->_doc->headerdata['bonus'] = $this->docform->bonus->getText();
+        $this->_doc->headerdata['discount'] = $this->docform->discount->getText();
 
+        if ($this->checkForm() == false) {
+            return;
+        }
+        
+        
         $isEdited = $this->_doc->document_id > 0;
 
         $pos_id = $this->docform->pos->getValue();
@@ -307,72 +315,6 @@ class ReturnIssue extends \App\Pages\Base
                 $this->_doc->parent_id = $this->_basedocid;
                 $this->_basedocid = 0;
             }
-
-            if ($pos_id > 0 && $sender->id == 'execdoc') {
-                $pos = \App\Entity\Pos::load($pos_id);
-
-
-                if($pos->usefisc == 1 && $this->_tvars['checkbox'] == true) {
-
-                    $cb = new  \App\Modules\CB\CheckBox($pos->cbkey, $pos->cbpin) ;
-                    $ret = $cb->Check($this->_doc) ;
-
-                    if(is_array($ret)) {
-                        $this->_doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
-                        $this->_doc->headerdata["tax_url"] = $ret['tax_url'];
-                        $this->_doc->headerdata["checkbox"] = $ret['checkid'];
-                    } else {
-                        $this->setError($ret);
-                        $conn->RollbackTrans();
-                        return;
-
-                    }
-
-
-                }
-
-
-
-                if ($pos->usefisc == 1 && $this->_tvars['ppo'] == true) {
-                    $this->_doc->headerdata["fiscalnumberpos"]  =  $pos->fiscalnumber;
-
-                    if ($this->_doc->parent_id > 0) {
-                        $basedoc = Document::load($this->_doc->parent_id);
-                        $this->_doc->headerdata["docnumberback"] = $basedoc->headerdata["fiscalnumber"];
-                    }
-
-                    if (strlen($this->_doc->headerdata["docnumberback"]) == 0) {
-                        $this->setError("Для фіскалізації створіть повернення на основі фіскального чека");
-                        return;
-                    }
-
-                    $this->_doc->headerdata["pos"] = $pos->pos_id;
-
-                    $ret = \App\Modules\PPO\PPOHelper::checkback($this->_doc);
-                    if ($ret['success'] == false && $ret['doclocnumber'] > 0) {
-                        //повторяем для  нового номера
-                        $pos->fiscdocnumber = $ret['doclocnumber'];
-                        $pos->save();
-                        $ret = \App\Modules\PPO\PPOHelper::checkback($this->_doc);
-                    }
-                    if ($ret['success'] == false) {
-                        $this->setErrorTopPage($ret['data']);
-                        return;
-                    } else {
-
-                        if ($ret['docnumber'] > 0) {
-                            $pos->fiscdocnumber = $ret['doclocnumber'] + 1;
-                            $pos->save();
-                            $this->_doc->headerdata["fiscalnumber"] = $ret['docnumber'];
-                        } else {
-                            $this->setError("Не повернено фіскальний номер");
-                            return;
-                        }
-                    }
-                }
-            }
-
-
 
             $this->_doc->save();
             if ($sender->id == 'execdoc') {
@@ -387,7 +329,90 @@ class ReturnIssue extends \App\Pages\Base
             } else {
                 $this->_doc->updateStatus($isEdited ? Document::STATE_EDITED : Document::STATE_NEW);
             }
+  
+            
+            
+            if ($pos_id > 0 && $sender->id == 'execdoc') {
+                $pos = \App\Entity\Pos::load($pos_id);
 
+                if($pos->usefisc == 1)  {
+                     
+                    if( $this->_tvars['checkbox'] == true) {
+
+                        $cb = new  \App\Modules\CB\CheckBox($pos->cbkey, $pos->cbpin) ;
+                        $ret = $cb->Check($this->_doc) ;
+
+                        if(is_array($ret)) {
+                            $this->_doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
+                            $this->_doc->headerdata["tax_url"] = $ret['tax_url'];
+                            $this->_doc->headerdata["checkbox"] = $ret['checkid'];
+                        } else {
+
+                            throw new \Exception($ret);
+
+                        }
+
+
+                    }
+                    if( $this->_tvars['vkassa'] == true) {
+                        $vk = new  \App\Modules\VK\VK($pos->vktoken) ;
+                        $ret = $vk->Check($this->_doc) ;
+
+                        if(is_array($ret)) {
+                            $this->_doc->headerdata["fiscalnumber"] = $ret['fiscnumber'];
+                        } else {
+
+                            throw new \Exception($ret);
+
+                        }         
+     
+                    }
+                    if ( $this->_tvars['ppo'] == true) {
+                        $this->_doc->headerdata["fiscalnumberpos"]  =  $pos->fiscalnumber;
+
+                        if ($this->_doc->parent_id > 0) {
+                            $basedoc = Document::load($this->_doc->parent_id);
+                            $this->_doc->headerdata["docnumberback"] = $basedoc->headerdata["fiscalnumber"];
+                        }
+
+                        if (strlen($this->_doc->headerdata["docnumberback"]) == 0) {
+
+                            throw new \Exception("Для фіскалізації створіть повернення на основі фіскального чека");
+                        }
+
+                        $this->_doc->headerdata["pos"] = $pos->pos_id;
+
+                        $ret = \App\Modules\PPO\PPOHelper::checkback($this->_doc);
+                        if ($ret['success'] == false && $ret['doclocnumber'] > 0) {
+                            //повторяем для  нового номера
+                            $pos->fiscdocnumber = $ret['doclocnumber'];
+                            $pos->save();
+                            $ret = \App\Modules\PPO\PPOHelper::checkback($this->_doc);
+                        }
+                        if ($ret['success'] == false) {
+
+                            throw new \Exception($ret['data']);
+
+                        } else {
+
+                            if ($ret['docnumber'] > 0) {
+                                $pos->fiscdocnumber = $ret['doclocnumber'] + 1;
+                                $pos->save();
+                                $this->_doc->headerdata["fiscalnumber"] = $ret['docnumber'];
+                                $this->_doc->headerdata["fiscalamount"] = $ret['fiscalamount'];
+                                $this->_doc->headerdata["fiscaltest"] = $ret['fiscaltest'];
+                            } else {
+
+                                throw new \Exception("Не повернено фіскальний номер");
+                            }
+                        }
+                    }
+                
+                    $this->_doc->save();    
+                }
+                
+            }
+   
 
             $conn->CommitTrans();
             App::Redirect("\\App\\Pages\\Register\\GIList");
@@ -400,7 +425,7 @@ class ReturnIssue extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }
@@ -422,7 +447,26 @@ class ReturnIssue extends \App\Pages\Base
 
         $payamount= $total  ;
 
-
+        if($this->_basedocid >0) {
+            $parent = Document::load($this->_basedocid) ;
+            $k = 1 - ($parent->amount - $total) / $parent->amount;
+            $parentbonus = intval($parent->getBonus(false));   //списано
+            if($parentbonus >0) {
+               $retbonus = intval($parentbonus * $k) ;// доля
+               $this->docform->bonus->setText($retbonus);
+               $payamount -= $retbonus;
+            }
+            
+            if($parent->headerdata["totaldisc"] >0) {
+               $disc= H::fa($parent->headerdata["totaldisc"] * $k);
+               $this->docform->discount->setText($disc);
+               $payamount -= $disc;
+            }
+            
+            
+        }
+        
+        
         $this->docform->payamount->setText(H::fa($payamount));
         //  $this->docform->discount->setText(H::fa($discount));
         $this->docform->payed->setText(H::fa($payamount));
@@ -462,7 +506,9 @@ class ReturnIssue extends \App\Pages\Base
         if (($this->docform->store->getValue() > 0) == false) {
             $this->setError("Не обрано склад");
         }
-
+        if ($this->docform->payment->getValue() == 0 && $this->_doc->payed > 0) {
+            $this->setError("Якщо внесена сума більше нуля, повинна бути обрана каса або рахунок");
+        }
         $c = $this->docform->customer->getKey();
         if ($this->_doc->amount > 0 && $this->_doc->payamount > $this->_doc->payed && $c == 0) {
             $this->setError("Якщо у борг або передоплата або нарахування бонусів має бути обраний контрагент");
@@ -519,3 +565,4 @@ class ReturnIssue extends \App\Pages\Base
     }
 
 }
+

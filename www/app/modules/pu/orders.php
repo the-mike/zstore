@@ -120,6 +120,9 @@ class Orders extends \App\Pages\Base
             $neworder->headerdata['outnumber'] = $puorder['id'];
             $neworder->headerdata['puorderback'] = 0;
             $neworder->headerdata['salesource'] = $modules['pusalesource'];
+            if($modules['pumf']>0) {
+              $neworder->headerdata['payment'] = $modules['pumf'];
+            }
 
             $neworder->headerdata['puclient'] = $puorder['client_first_name'] . ' ' . $puorder['client_last_name'];
 
@@ -170,23 +173,29 @@ class Orders extends \App\Pages\Base
         foreach ($this->_neworders as $shoporder) {
             $shoporder->document_number = $shoporder->nextNumber();
             if (strlen($shoporder->document_number) == 0) {
-                $shoporder->document_number = 'PU00001';
+                $shoporder->document_number = 'PU-00001';
             }
 
-            if (strlen($shoporder->headerdata['cemail'])> 0 && $modules['puinsertcust'] == 1) {
-                $cust = Customer::getByEmail($shoporder->headerdata['cemail']);
+            if ( $modules['puinsertcust'] == 1) {
+                $phone = \App\Util::handlePhone($shoporder->headerdata['cphone'] )  ;
+                $cust = Customer::getByPhone($phone);
                 if ($cust == null) {
+                    $cust = Customer::getByEmail($shoporder->headerdata['cemail']);
+                }   
+                if ($cust == null &&strlen($shoporder->headerdata['cname']) >0 && ( strlen($phone) >0 || strlen($shoporder->headerdata['cemail'])>0 ) ) {
                     $cust = new Customer();
                     $cust->customer_name = $shoporder->headerdata['cname'];
-                    $cust->phone = \App\Util::handlePhone($shoporder->headerdata['cphone']);
+                    $cust->phone = $phone;
 
                     $cust->type = Customer::TYPE_BAYER;
 
                     $cust->email = $shoporder->headerdata['cemail'];
                     $cust->comment = "Клiєнт Prom UA";
                     $cust->save();
+                }        
+                if($cust != null) {         
+                    $shoporder->customer_id = $cust->customer_id;
                 }
-                $shoporder->customer_id = $cust->customer_id;
             }
 
 

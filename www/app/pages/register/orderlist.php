@@ -81,7 +81,7 @@ class OrderList extends \App\Pages\Base
         $this->statuspan->add(new \App\Widgets\DocView('docview'));
 
         $this->statuspan->add(new Form('moveform'));
-        $this->statuspan->moveform->add(new DropDownChoice('brmove', \App\Entity\Branch::getList(), \App\Acl::getCurrentBranch()))->onChange($this, "onBranch", true);
+        $this->statuspan->moveform->add(new DropDownChoice('brmove', \App\Entity\Branch::getList(), \App\ACL::getCurrentBranch()))->onChange($this, "onBranch", true);
         $this->statuspan->moveform->add(new DropDownChoice('usmove', array(), 0));
         $this->statuspan->moveform->add(new SubmitButton('bmove'))->onClick($this, 'MoveOnSubmit');
 
@@ -106,6 +106,7 @@ class OrderList extends \App\Pages\Base
 
         $this->add(new Panel("editpanel"))->setVisible(false);
         $this->editpanel->add(new Label("editdn"));
+        $this->editpanel->add(new Label("editchat"));
         $this->editpanel->add(new Form("editform"));
         $this->editpanel->editform->add(new SubmitButton('editcancel'))->onClick($this, 'editOnSubmit');
         $this->editpanel->editform->add(new SubmitButton('editsave'))->onClick($this, 'editOnSubmit');
@@ -264,25 +265,72 @@ class OrderList extends \App\Pages\Base
 
 
     public function statusOnSubmit($sender) {
-        if (\App\Acl::checkChangeStateDoc($this->_doc, true, true) == false) {
+        if (\App\ACL::checkChangeStateDoc($this->_doc, true, true) == false) {
             return;
         }
 
         $state = $this->_doc->state;
 
+      //проверяем  что есть ТТН
+        $list = $this->_doc->getChildren('TTN');
+        $ttn = count($list) > 0;
+        $list = $this->_doc->getChildren('GoodsIssue');
+        $gi = count($list) > 0;
+        //  $list = $this->_doc->getChildren('Invoice');
+        //   $invoice = count($list) > 0;
+        $list = $this->_doc->getChildren('POSCheck');
+        $pos = count($list) > 0;
+
+    
+    
+        if ($sender->id == "btask") {
+            $task = count($this->_doc->getChildren('Task')) > 0;
+
+            if ($task) {
+
+                $this->setWarn('Вже існує документ Наряд');
+            }
+            App::Redirect("\\App\\Pages\\Doc\\Task", 0, $this->_doc->document_id);
+            return;
+        }
+        if ($sender->id == "bttn") {
+            if ($ttn) {
+                $this->setWarn('У замовлення вже є відправки');
+            }
+            App::Redirect("\\App\\Pages\\Doc\\TTN", 0, $this->_doc->document_id);
+            return;
+        }
+        if ($sender->id == "bcopy") {
+
+            App::Redirect("\\App\\Pages\\Doc\\Order", 0, $this->_doc->document_id);
+            return;
+        }
+        if ($sender->id == "bpos") {
+            if ($pos) {
+                $this->setWarn('Вже існує документ Чек');
+            }
+            App::Redirect("\\App\\Pages\\Service\\ARMPos", 0, $this->_doc->document_id);
+            return;
+        }
+
+        if ($sender->id == "bgi") {
+
+            App::Redirect("\\App\\Pages\\Doc\\GoodsIssue", 0, $this->_doc->document_id);
+            return;
+        }
+        if ($sender->id == "bco") {
+
+            App::Redirect("\\App\\Pages\\Doc\\OrderCust", 0, $this->_doc->document_id);
+            return;
+        }
+
+        
+        $conn = \ZDB\DB::getConnect();
+        $conn->BeginTrans();
+
         try {
 
-            //проверяем  что есть ТТН
-            $list = $this->_doc->getChildren('TTN');
-            $ttn = count($list) > 0;
-            $list = $this->_doc->getChildren('GoodsIssue');
-            $gi = count($list) > 0;
-            //  $list = $this->_doc->getChildren('Invoice');
-            //   $invoice = count($list) > 0;
-            $list = $this->_doc->getChildren('POSCheck');
-            $pos = count($list) > 0;
-
-            if ($sender->id == "bscan") {
+              if ($sender->id == "bscan") {
                 $this->openedit();
                 return;
             }
@@ -299,46 +347,6 @@ class OrderList extends \App\Pages\Base
 
                 $this->setWarn('Замовлення анульовано');
             }
-            if ($sender->id == "btask") {
-                $task = count($this->_doc->getChildren('Task')) > 0;
-
-                if ($task) {
-
-                    $this->setWarn('Вже існує документ Наряд');
-                }
-                App::Redirect("\\App\\Pages\\Doc\\Task", 0, $this->_doc->document_id);
-            }
-            if ($sender->id == "bttn") {
-                if ($ttn) {
-                    $this->setWarn('У замовлення вже є відправки');
-                }
-                App::Redirect("\\App\\Pages\\Doc\\TTN", 0, $this->_doc->document_id);
-                return;
-            }
-            if ($sender->id == "bcopy") {
-
-                App::Redirect("\\App\\Pages\\Doc\\Order", 0, $this->_doc->document_id);
-                return;
-            }
-            if ($sender->id == "bpos") {
-                if ($pos) {
-                    $this->setWarn('Вже існує документ Чек');
-                }
-                App::Redirect("\\App\\Pages\\Doc\\POSCheck", 0, $this->_doc->document_id);
-                return;
-            }
-
-            if ($sender->id == "bgi") {
-
-                App::Redirect("\\App\\Pages\\Doc\\GoodsIssue", 0, $this->_doc->document_id);
-                return;
-            }
-            if ($sender->id == "bco") {
-
-                App::Redirect("\\App\\Pages\\Doc\\OrderCust", 0, $this->_doc->document_id);
-                return;
-            }
-
 
             if ($sender->id == "bclose") {
 
@@ -354,14 +362,22 @@ class OrderList extends \App\Pages\Base
 
 
                 $this->_doc->updateStatus(Document::STATE_CLOSED);
-                $this->statuspan->setVisible(false);
+ 
             }
-        } catch(\Exception $e) {
-            $this->setError($e->getMessage());
+            $conn->CommitTrans();
 
+        } catch(\Exception $e) {
+            $this->setError($e->getMessage()) ;
+            $conn->RollbackTrans();
+            return;
         }
+        
+        
+        
+        $this->statuspan->setVisible(false);    
+        $this->_doc = null;            
         $this->listpanel->doclist->Reload(false);
-        $this->updateStatusButtons();
+//        $this->updateStatusButtons();
     }
 
     public function updateStatusButtons() {
@@ -475,7 +491,7 @@ class OrderList extends \App\Pages\Base
 
         }
 
-        if ($state == Document::STATE_INPROCESS) {
+        if ($state == Document::STATE_INPROCESS || $state == Document::STATE_FINISHED || $state == Document::STATE_READYTOSHIP) {
             $this->statuspan->resform->setVisible(true);
             $reserved = $this->_doc->hasStore();
             $this->statuspan->resform->bres->setVisible(!$reserved);
@@ -518,9 +534,8 @@ class OrderList extends \App\Pages\Base
             $this->statuspan->statusform->bgi->setVisible(false);
         }
 
-
-        $list = $this->_doc->getChildren('Invoice');
-        if (count($list) > 0) {
+    
+        if ($this->_doc->hasPayments()) {
             $this->statuspan->statusform->bpos->setVisible(false);
         }
     }
@@ -544,7 +559,7 @@ class OrderList extends \App\Pages\Base
         $this->updateStatusButtons();
         $this->goAnkor('dankor');
         $this->_tvars['askclose'] = false;
-        $conn= \zdb\db::getConnect() ;
+        $conn= \ZDB\db::getConnect() ;
 
         $stl = array() ;
         foreach($conn->Execute("select store_id,storename from stores") as $row) {
@@ -556,6 +571,7 @@ class OrderList extends \App\Pages\Base
             $ait=array('itemname'=>$it->itemname,'itemcode'=>$it->item_code,'itemqty'=>$it->quantity);
 
             $ait['citemsstore']  =  array();
+            $ait['toco']  =  "addItemToCO([{$it->item_id}])";
 
             foreach($stl as $k=>$v) {
                 $qty = $it->getQuantity($k);
@@ -565,7 +581,7 @@ class OrderList extends \App\Pages\Base
             }
             $ait['citemscust']  =  array();
             foreach(\App\Entity\CustItem::find("item_id={$it->item_id} ") as $ci) {
-                $cer = array('itcust'=>$ci->customer_name,'itcustcode'=>$ci->cust_code,'itcustcomment'=>$ci->comment);
+                $cer = array('itcust'=>$ci->customer_name,'itcustcode'=>$ci->cust_code);
                 $cer['itcustprice']  = H::fa($ci->price);
                 $cer['itcustupdated']  = H::fd($ci->updatedon);
 
@@ -574,10 +590,65 @@ class OrderList extends \App\Pages\Base
 
                 $ait['citemscust'][]=$cer;
             }
+         
+            $ait['ciprod']  =  array();
+         
 
+            $itpr=\App\Entity\Item::getFirst("disabled<> 1 and  item_id = {$it->item_id} and  item_id in(select pitem_id from item_set)") ;
+            if($itpr instanceof \App\Entity\Item)  {
+                $max = 1000000;
+                $parts = \App\Entity\ItemSet::find("pitem_id=".$itpr->item_id) ;
 
+                foreach($parts as $part) {
+                    $pi = \App\Entity\Item::load($part->item_id);
+                    if($pi==null) {
+                        continue;
+                    }
+                    $pqty = $pi->getQuantity();
+                    if($pqty==0) {
+                        $max=0;
+                        break;
+                    }
+                    $t = $pqty/$part->qty;
+                    if($t<$max) {
+                        $max = $t;
+                    }
+
+                }
+                if($max>0 && $max < 1000000) {
+                      $prod  =  array('prqty'=>H::fqty($max) );
+                }
+
+           
+
+            }         
+         
+  
+            $ait['ciprod'][]=$prod;
+            $this->_tvars['isciprod']=count($ait['ciprod'])>0;
 
             $this->_tvars['citems'][]=$ait;
+            
+            $sitems=[];
+            
+            $corders= Document::find("meta_name='OrderCust' and state in(5,7) ")  ;
+            
+            foreach($corders as $o) {
+               foreach($this->_doc->unpackDetails('detaildata') as $it) {
+                  foreach($o->unpackDetails('detaildata') as $cit) {
+                       if($it->item_id==$cit->item_id) {
+                           $r=[] ;
+                           $r['dnum']  = $o->document_number;
+                           $r['dd']  = $o->headerdata['delivery_date'] >0 ? H::fd($o->headerdata['delivery_date']) :'';
+                           $r['dc']  = $o->customer_name;
+                           $sitems[$o->document_id] = $r;
+                           break;
+                       }
+                  }
+               }
+           }
+            $this->_tvars['sitems']= array_values($sitems);
+            $this->_tvars['issitems']= count($sitems) >0;
 
 
         }
@@ -660,9 +731,12 @@ class OrderList extends \App\Pages\Base
         $this->listpanel->setVisible(false);
         $this->statuspan->setVisible(false);
         $this->payform->setVisible(false);
-
         $this->_doc = Document::load($this->_doc->document_id);
+        $this->editpanel->editchat->setAttribute('onclick', "opencchat({$this->_doc->document_id})");
 
+        $ch = $this->checkChat($this->_doc);
+        $this->editpanel->editchat->setVisible($ch);
+        
         $this->editpanel->editdn->setText($this->_doc->document_number);
         $this->_itemlist = [];
         foreach($this->_doc->unpackDetails('detaildata')  as $it) {
@@ -699,8 +773,14 @@ class OrderList extends \App\Pages\Base
 
         foreach ($this->_itemlist as $ri => $_item) {
             if ($_item->bar_code == $code || $_item->item_code == $code || $_item->bar_code == $code0 || $_item->item_code == $code0) {
+                if($this->_itemlist[$ri]->checkedqty ==  $this->_itemlist[$ri]->quantity) {
+                    $this->setWarn('Лишній товар') ;
+                    $this->addJavaScript("new Audio('/assets/error.mp3').play()", true);
+                               
+                    return;
+                }
                 $this->_itemlist[$ri]->checkedqty += 1;
-                if($this->_itemlist[$ri]->checkedqty >=  $this->_itemlist[$ri]->quantity) {
+                if($this->_itemlist[$ri]->checkedqty ==  $this->_itemlist[$ri]->quantity) {
                     $this->_itemlist[$ri]->checked = true;
                 }
 
@@ -710,33 +790,45 @@ class OrderList extends \App\Pages\Base
                 return;
             }
         }
+        $this->setWarn('Товар не знайдено') ;
         $this->addJavaScript("new Audio('/assets/error.mp3').play()", true);
 
 
     }
 
-
+   
     public function editOnSubmit($sender) {
 
 
+            $conn = \ZDB\DB::getConnect();
+            $conn->BeginTrans();
 
-        foreach ($this->_itemlist as   $_item) {
-            if($sender->id == "editready" && $_item->checked != true) {
-                $this->setError('Не зібрані всі позиції') ;
+            try {
+ 
 
-                return;
-            }
+                foreach ($this->_itemlist as   $_item) {
+                    if($sender->id == "editready" && $_item->checked != true) {
+                        $this->setError('Не зібрані всі позиції') ;
+
+                        return;
+                    }
+                }
+
+
+                $this->_doc->packDetails('detaildata', $this->_itemlist)  ;
+                $this->_doc->save();
+                if ($sender->id == "editready") {
+                    $this->_doc->updateStatus(Document::STATE_READYTOSHIP);
+                    $this->listpanel->doclist->Reload(false);
+
+                }
+             $conn->CommitTrans();
+
+        } catch(\Exception $e) {
+            $this->setError($e->getMessage()) ;
+            $conn->RollbackTrans();
+            return;
         }
-
-
-        $this->_doc->packDetails('detaildata', $this->_itemlist)  ;
-        $this->_doc->save();
-        if ($sender->id == "editready") {
-            $this->_doc->updateStatus(Document::STATE_READYTOSHIP);
-            $this->listpanel->doclist->Reload(false);
-
-        }
-
         $this->editpanel->setVisible(false);
         $this->listpanel->setVisible(true);
 
@@ -835,7 +927,7 @@ class OrderList extends \App\Pages\Base
 
         $msg = new \App\Entity\Message() ;
         $msg->message=$message;
-        $msg->user_id= \app\System::getUser()->user_id;
+        $msg->user_id= \App\System::getUser()->user_id;
         $msg->item_id=$doc->document_id;
         $msg->item_type=\App\Entity\Message::TYPE_CUSTCHAT;
         $msg->save() ;

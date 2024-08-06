@@ -50,16 +50,27 @@ class POSCheck extends Document
 
         $common = System::getOptions('common');
 
-        $firm = H::getFirmData($this->firm_id);
-        $printer = System::getOptions('printer');
+        $firm = H::getFirmData($this->firm_id,$this->branch_id);
 
+        $shopname=$common["shopname"] ;
+        $pos = \App\Entity\Pos::load($this->headerdata['pos']) ;
+        if(strlen($pos->pointname) >0) {
+           $shopname=$pos->pointname ;   
+        }
+        if(strlen($pos->address) >0) {
+           $firm["address"]=$pos->address ;   
+        }
+    
+        
+        $printer = System::getOptions('printer');
+ 
         $pp = doubleval($this->headerdata['payed'])+ doubleval($this->headerdata['payedcard']);
 
         $header = array('date'            => H::fd($this->document_date),
                         "_detail"         => $detail,
                         "firm_name"       => $firm["firm_name"],
 
-                        "shopname"        => $common["shopname"],
+                        "shopname"        => $shopname,
                         "address"         => $firm["address"],
                         "phone"           => $firm["phone"],
                         "inn"           => strlen($firm["inn"]) >0 ? $firm["inn"] : false,
@@ -68,7 +79,7 @@ class POSCheck extends Document
                         "fiscalnumber"  => strlen($this->headerdata["fiscalnumber"] ?? null) > 0 ? $this->headerdata["fiscalnumber"] : false,
                         "exchange"        => H::fasell($this->headerdata["exchange"]),
                         "pos_name"        => $this->headerdata["pos_name"],
-                        "time"            => H::fdt($this->headerdata["time"]),
+                        "time"            => H::fdt($this->headerdata["time"],true),
                         "document_number" => $this->document_number,
                         "total"           => H::fasell($this->amount),
                         "payed"           => H::fasell($pp),
@@ -122,6 +133,17 @@ class POSCheck extends Document
         }
 
         $firm = H::getFirmData($this->firm_id, $this->branch_id);
+    
+        $shopname=$common["shopname"] ;
+        $pos = \App\Entity\Pos::load($this->headerdata['pos']) ;
+        if(strlen($pos->pointname) >0) {
+           $shopname=$pos->pointname ;   
+        }
+        if(strlen($pos->address) >0) {
+           $firm["address"]=$pos->address ;   
+        }
+    
+    
         $addbonus = $this->getBonus() ;
         $delbonus = $this->getBonus(false) ;
         $allbonus = 0 ;
@@ -136,7 +158,7 @@ class POSCheck extends Document
                         "style"         => $style,
                         "username"      => $this->headerdata['cashier'] ,
                         "firm_name"     => $firm["firm_name"],
-                        "shopname"      => strlen($common["shopname"]) > 0 ? $common["shopname"] : false,
+                        "shopname"      => strlen($shopname) > 0 ? $shopname : false,
                         "address"       => $firm["address"],
                         "phone"         => $firm["phone"],
                         "inn"           => strlen($firm["inn"]) >0 ? $firm["inn"] : false,
@@ -150,7 +172,7 @@ class POSCheck extends Document
 
 
                         "pos_name"        => $this->headerdata["pos_name"],
-                        "time"            => H::fdt($this->headerdata["time"]),
+                        "time"            => H::fdt($this->headerdata["time"],true),
                         "document_number" => $this->document_number,
                         "total"           => H::fasell($this->amount),
                         "totaldisc"           => $this->headerdata["totaldisc"] > 0 ? H::fasell($this->headerdata["totaldisc"]) : false,
@@ -159,6 +181,7 @@ class POSCheck extends Document
                         "delbonus"           => $delbonus > 0 ? H::fa($delbonus) : false,
                         "allbonus"           => $allbonus > 0 ? H::fa($allbonus) : false,
                         "trans"           => $this->headerdata["trans"] > 0 ? $this->headerdata["trans"] : false,
+                        "isdocqrcode"     =>  $common['printoutqrcode']==1,
                         "docqrcodeurl"     =>  $this->getQRCodeImage(true),
                         "docqrcode"       => $this->getQRCodeImage(),
                         "payed"           => $pp > 0 ? H::fasell($pp) : false,
@@ -174,7 +197,29 @@ class POSCheck extends Document
             $i=  rand(0, count($frases) -1)  ;
             $header['checkslogan']   =   $frases[$i];
         }
+        if(strlen($header['checkslogan'] ??'') ==0) {
+            $header['checkslogan']  = false;
+        }
 
+        //промокод        
+        $pc = \App\Entity\PromoCode::find('type=2 and disabled <> 1','id desc') ;
+        foreach($pc as $p) {
+           
+           if($p->dateto >0 && $p->dateto < time() ) {
+               continue;               
+           }
+           if($p->showcheck==1) {
+               $header['promo']  = 'Промокод '. $p->code . " на {$p->disc}% знижку";
+               breack; 
+           }
+        }  
+           
+           
+        if(strlen($header['promo']  ??'') ==0) {
+            $header['promo']  = false;
+        }
+        
+        
         $header['form1']  = false;
         $header['form2']  = false;
         $header['form3']  = false;
@@ -218,6 +263,60 @@ class POSCheck extends Document
             $k = ($this->amount - $dd) / $this->amount;
         }
 
+
+
+        //оплата
+
+        $pp = $this->headerdata['payed'];
+        if ($this->headerdata['exchange'] > 0) {
+
+            $pp = $pp - $this->headerdata['exchange']; //без здачи
+        }          
+        $payed = 0;
+        if(($this->headerdata['payment'] ??0)  >0) {
+            $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $pp, $this->headerdata['payment']);
+        } else {
+            if(($this->headerdata['mfnal']??0)  >0 && $pp >0) {
+                $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $pp, $this->headerdata['mfnal']);
+            }
+            if(($this->headerdata['mfbeznal']??0) >0 && ($this->headerdata['payedcard']??0) >0) {
+                $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->headerdata['payedcard'], $this->headerdata['mfbeznal']);
+            }
+        }
+
+
+        if ($payed > 0) {
+            $this->payed = $payed;
+        }
+        \App\Entity\IOState::addIOState($this->document_id, $payed, \App\Entity\IOState::TYPE_BASE_INCOME);
+        $this->DoBalans() ;
+
+        
+        if ($this->parent_id > 0) {
+            $parent = Document::load($this->parent_id);
+            if ($parent->meta_name == 'ServiceAct' ) {
+                if($parent->state == Document::STATE_WP )  {
+                   $parent->updateStatus(Document::STATE_PAYED); 
+                }
+                
+                
+                return true; //проводки выполняются  в  сервисе
+            }
+        }        
+ 
+
+        // работы
+        foreach ($this->unpackDetails('services') as $ser) {
+
+            $sc = new Entry($this->document_id, 0 - ($ser->price * $k * $ser->quantity), 0);
+            $sc->setService($ser->service_id);
+            // $sc->setExtCode(0 - ($ser->price * $k)); //Для АВС
+            $sc->setOutPrice(0 - $ser->price * $k);
+
+            $sc->save();
+        }
+ 
+        
         // товары
         foreach ($this->unpackDetails('detaildata') as $item) {
 
@@ -230,6 +329,7 @@ class POSCheck extends Document
                 if ($item->autooutcome == 1) {    //комплекты
                     $set = \App\Entity\ItemSet::find("pitem_id=" . $item->item_id);
                     foreach ($set as $part) {
+                        $lost = 0;
 
                         $itemp = \App\Entity\Item::load($part->item_id);
                         if($itemp == null) {
@@ -241,6 +341,12 @@ class POSCheck extends Document
                             throw new \Exception("На складі всього ".H::fqty($itemp->getQuantity($this->headerdata['store']))." ТМЦ {$itemp->itemname}. Списання у мінус заборонено");
 
                         }
+                        //учитываем  отходы
+                        if ($itemp->lost > 0) {
+                            $k = 1 / (1 - $itemp->lost / 100);
+                            $itemp->quantity = $itemp->quantity * $k;
+                            $lost = $k - 1;
+                        }
 
 
                         $listst = \App\Entity\Stock::pickup($this->headerdata['store'], $itemp);
@@ -251,7 +357,17 @@ class POSCheck extends Document
                             $sc->tag=Entry::TAG_TOPROD;
 
                             $sc->save();
-                        }
+                    
+                            if ($lost > 0) {
+                                $io = new \App\Entity\IOState();
+                                $io->document_id = $this->document_id;
+                                $io->amount = 0 - $st->quantity * $st->partion * $lost;
+                                $io->iotype = \App\Entity\IOState::TYPE_TRASH;
+
+                                $io->save();
+
+                            }    
+                       }
                     }
                 }
 
@@ -289,43 +405,27 @@ class POSCheck extends Document
                 $sc->save();
             }
         }
+        
+        if(strlen($this->headerdata['promocode']) > 0){
+            \App\Entity\PromoCode::apply($this->headerdata['promocode'],$this);
+        };
+       
+        //бонус  сотруднику
 
-        // работы
-        foreach ($this->unpackDetails('services') as $ser) {
+        $disc = \App\System::getOptions("discount");
+        $emp_id = \App\System::getUser()->employee_id ;
+        if($emp_id >0 && $disc["bonussell"] >0) {
+            $b =  $this->amount * $disc["bonussell"] / 100;
+            $ua = new \App\Entity\EmpAcc();
+            $ua->optype = \App\Entity\EmpAcc::BONUS;
+            $ua->document_id = $this->document_id;
+            $ua->emp_id = $emp_id;
+            $ua->amount = $b;
+            $ua->save();
 
-            $sc = new Entry($this->document_id, 0 - ($ser->price * $k * $ser->quantity), 0);
-            $sc->setService($ser->service_id);
-            // $sc->setExtCode(0 - ($ser->price * $k)); //Для АВС
-            $sc->setOutPrice(0 - $ser->price * $k);
-
-            $sc->save();
         }
-
-        //оплата
-
-        $pp = $this->headerdata['payed'];
-        if ($this->headerdata['exchange'] > 0) {
-
-            $pp = $pp - $this->headerdata['exchange']; //без здачи
-        }
-        $payed = 0;
-        if($this->headerdata['payment']  >0) {
-            $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $pp, $this->headerdata['payment']);
-        } else {
-            if($this->headerdata['mfnal']  >0 && $pp >0) {
-                $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $pp, $this->headerdata['mfnal']);
-            }
-            if($this->headerdata['mfbeznal']  >0 && $this->headerdata['payedcard'] >0) {
-                $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, $this->headerdata['payedcard'], $this->headerdata['mfbeznal']);
-            }
-        }
-
-
-        if ($payed > 0) {
-            $this->payed = $payed;
-        }
-        \App\Entity\IOState::addIOState($this->document_id, $payed, \App\Entity\IOState::TYPE_BASE_INCOME);
-
+      
+        
         return true;
     }
 
@@ -345,6 +445,35 @@ class POSCheck extends Document
 
         return $list;
     }
+ 
+     /**
+    * @override
+    */
+   public function DoBalans() {
+        $conn = \ZDB\DB::getConnect();
+        $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
 
+               
+           //тмц
+        if($this->payamount >0) {
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = 0-$this->payamount;
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+      //платежи       
+        foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where paytype < 1000 and   coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = $p['amount'];
+            $b->createdon = strtotime($p['paydate']);
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+        
+    }
 
 }

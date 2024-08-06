@@ -2,113 +2,65 @@
     <head>
        
        
+        <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 
     </head>
 
     <body>
         {{#winfo}}
 
-        <div class="row  " style="justify-content: space-between">
-            <div class="col-auto ">
-                <div class="info-box">
-                    <span class="info-box-icon bg-info elevation-1"><i class="fa fa-file-invoice "></i></span>
-
-                    <div class="info-box-content">
-                        <span class="info-box-text">Замовлень</span>
-                        <span class="info-box-number">
-                            {{biorders}}
-
-                        </span>
-                    </div>
-                    <!-- /.info-box-content -->
-                </div>
-                <!-- /.info-box -->
+        <div class="row  "  >
+            <div class="col-6 col-sm-4 col-lg-2 ">
+               <div class="small-box bg-info">
+                  <div class="inner">
+                    <h4>{{biorders}}</h4>
+                    <p>Замовлень</p>
+                  </div>
+             </div>
+            </div>
+           <div class="col-6 col-sm-4 col-lg-2  ">
+               <div class="small-box bg-info">
+                  <div class="inner">
+                    <h4>{{biitemscnt}}</h4>
+                    <p>ТМЦ   (на суму)</p>
+                  </div>
+             </div>
+            </div>
+        <div class="col-6 col-sm-4 col-lg-2  ">
+               <div class="small-box bg-info">
+                  <div class="inner">
+                    <h4>{{binal}}</h4>
+                    <p>Готiвка</p>
+                  </div>
+             </div>
+            </div>
+           <div class="col-6 col-sm-4 col-lg-2  ">
+               <div class="small-box bg-info">
+                  <div class="inner">
+                    <h4>{{bibeznal}}</h4>
+                    <p>Безготiвка</p>
+                  </div>
+             </div>
+            </div>
+           <div class="col-6 col-sm-4 col-lg-2  ">
+               <div class="small-box bg-info">
+                  <div class="inner">
+                    <h4>{{bicredit}}</h4>
+                    <p>Кред. борг</p>
+                  </div>
+             </div>
             </div>
 
-            <div class="col-auto  ">
-                <div class="info-box">
-                    <span class="info-box-icon bg-success elevation-1"><i class="fa  fa-pallet"></i></span>
-
-                    <div class="info-box-content">
-                        <span class="info-box-text">Товарiв на складi</span>
-                        <span class="info-box-number">
-                            На суму  {{biitemscnt}}
-
-
-                        </span>
-                    </div>
-                    <!-- /.info-box-content -->
-                </div>
-                <!-- /.info-box -->
+         <div class="col-6 col-sm-4 col-lg-2  ">
+               <div class="small-box bg-info">
+                  <div class="inner">
+                    <h4>{{bidebet}}</h4>
+                    <p>Деб. борг</p>
+                  </div>
+             </div>
             </div>
 
-          <div class="col-auto ">
-                <div class="info-box">
-                    <span class="info-box-icon bg-success elevation-1"><i class="fa fa-money-bill "></i></span>
-
-                    <div class="info-box-content">
-                        <span class="info-box-text">Готiвка</span>
-                        <span class="info-box-number">
-                              {{binal}}
-
-
-                        </span>
-                    </div>
-
-                </div>
-                <!-- /.info-box -->
-            </div>
-             <div class="col-auto ">
-                <div class="info-box">
-                    <span class="info-box-icon bg-success elevation-1"><i class="fa fa-credit-card "></i></span>
-
-                    <div class="info-box-content">
-                        <span class="info-box-text">Безготiвка</span>
-                        <span class="info-box-number">
-                              {{bibeznal}}
-
-
-                        </span>
-                    </div>
-
-                </div>
-                <!-- /.info-box -->
-            </div>
-          
-            
-            
-            <div class="col-auto   ">
-                <div class="info-box">
-                    <span class="info-box-icon bg-success elevation-1"><i class="fa fa-sign-out-alt"></i></span>
-
-                    <div class="info-box-content">
-                        <span class="info-box-text">Кред. борг</span>
-                        <span class="info-box-number">
-                              {{bicredit}}
-
-
-                        </span>
-                    </div>
-
-                </div>
-                <!-- /.info-box -->
-            </div>
-            <div class="col-auto  ">
-                <div class="info-box">
-                    <span class="info-box-icon bg-success elevation-1"><i class="fa fa-sign-in-alt "></i></span>
-
-                    <div class="info-box-content">
-                        <span class="info-box-text">Деб. борг</span>
-                        <span class="info-box-number">
-                              {{bidebet}}
-
-
-                        </span>
-                    </div>
-
-                </div>
-                <!-- /.info-box -->
-            </div>
+      
 
         </div>
         {{/winfo}}
@@ -150,11 +102,76 @@
 
         <div class="row">  
 
+           <div   class="col-12 col-lg-6 ">
+ 
 
-            {{#wsdate}}
-            <div   class="col-12 col-lg-6 ">
+            {{#wrdoc}}
+
 
                 <div   class="card ">
+                    <div   class="card-body">
+                        <h4>Останні документи</h4>
+                        <small>Нещодавно змiненi документи</small>
+                        <br><a zippy="rdcsv">Експорт у Excel</a>
+                        <table class="table   table-sm">
+                            <tr>
+                                <th>Номер</th>
+                                <th>Тип</th>
+                                <th>Статус</th>
+                                <th class="text-right">Сума</th>
+                                <th>Змiнив</th>
+                                <th>Змiнено</th>
+                                
+
+                            </tr>
+                            <tr zippy="rdoclist">
+                               <td><a zippy="wrd_number"></a></td>
+                                <td zippy="wrd_type"></td>
+                                <td zippy="wrd_state"></td>
+                                <td class="text-right" zippy="wrd_amount"></td>
+                                <td zippy="wrd_user"></td>
+                                <td zippy="wrd_date"></td>
+                                
+                            </tr>
+                        </table>
+                        <div zippy="wrpag"></div>    
+                    </div>
+                </div>
+      
+            {{/wrdoc}}
+
+            {{#wmdoc}}
+           
+                <div   class="card ">
+                    <div   class="card-body">
+                        <h4>Мої документи</h4>
+                        <small>Документи, створені поточним користувачем</small>
+                        <br><a zippy="mdcsv">Експорт у Excel</a>
+                        <table class="table   table-sm">
+                            <tr>
+                                <th>Номер</th>
+                                <th>Тип</th>
+                                <th>Дата</th>
+                                <th class="text-right">Сума</th>
+
+                            </tr>
+                            <tr zippy="mdoclist">
+                                <td><a zippy="wmd_number"></a></td>
+                                <td zippy="wmd_type"></td>
+                                <td zippy="wmd_date"></td>
+                                <td class="text-right" zippy="wmd_amount"></td>
+                            </tr>
+                        </table>
+                        <div zippy="wmpag"></div>    
+                    </div>
+                </div>
+
+            {{/wmdoc}}
+            </div>      
+             <div   class="col-12 col-lg-6 ">
+                    
+            {{#wsdate}}
+                   <div   class="card ">
                     <div   class="card-body">
                         <h4>Простроченi товари</h4>
                         <small>Товари для котрих закiнчився термін придатностi</small>
@@ -180,11 +197,11 @@
 
                     </div>
                 </div>
-            </div>
+         
             {{/wsdate}}
+            
             {{#wminqty}}
-            <div   class="col-12 col-lg-6 ">
-
+         
                 <div   class="card ">
                     <div   class="card-body">
                         <h4>Критична кiлькiсть </h4>
@@ -192,7 +209,7 @@
                         <br><a zippy="mqcsv">Експорт у Excel</a>
                         <table class="table   table-sm">
                             <tr>
-                                  <th>Склад</th>
+                              
                            
                                 <th>Товар</th>
                                 <th>Код</th>
@@ -202,8 +219,7 @@
                                 <th class="text-right">Мiн.</th>
                             </tr>
                             <tr zippy="mqlist">
-                                <td zippy="wmq_storename"></td>
-           
+                               
                                 <td zippy="wmq_itemname"></td>
                                 <td zippy="wmq_item_code"></td>
                                 <td zippy="wmq_cust"></td>
@@ -214,90 +230,13 @@
                         <div zippy="mqpag"></div>        
                     </div>
                 </div>
-            </div>      
+               
             {{/wminqty}}
-
-
-            {{#wrdoc}}
-            <div   class="col-12 col-lg-6 ">
-
-                <div   class="card ">
-                    <div   class="card-body">
-                        <h4>Останні документи</h4>
-                        <small>Документи з нещодавно змiненим статусом</small>
-                        <br><a zippy="rdcsv">Експорт у Excel</a>
-                        <table class="table   table-sm">
-                            <tr>
-                                <th>Номер</th>
-                                <th>Тип</th>
-                                <th>Статус</th>
-                                <th class="text-right">Сума</th>
-                                <th>Змiнив</th>
-                                <th>Дата</th>
-                                
-
-                            </tr>
-                            <tr zippy="rdoclist">
-                               <td><a zippy="wrd_number"></a></td>
-                                <td zippy="wrd_type"></td>
-                                <td zippy="wrd_state"></td>
-                                <td class="text-right" zippy="wrd_amount"></td>
-                                <td zippy="wrd_user"></td>
-                                <td zippy="wrd_date"></td>
-                                
-                            </tr>
-                        </table>
-                        <div zippy="wrpag"></div>    
-                    </div>
-                </div>
-            </div>      
-            {{/wrdoc}}
-               {{#wmdoc}}
-            <div   class="col-12 col-lg-6 ">
-
-                <div   class="card ">
-                    <div   class="card-body">
-                        <h4>Мої документи</h4>
-                        <small>Документи, створені поточним користувачем</small>
-                        <br><a zippy="mdcsv">Експорт у Excel</a>
-                        <table class="table   table-sm">
-                            <tr>
-                                <th>Номер</th>
-                                <th>Тип</th>
-                                <th>Дата</th>
-                                <th class="text-right">Сума</th>
-
-                            </tr>
-                            <tr zippy="mdoclist">
-                                <td><a zippy="wmd_number"></a></td>
-                                <td zippy="wmd_type"></td>
-                                <td zippy="wmd_date"></td>
-                                <td class="text-right" zippy="wmd_amount"></td>
-                            </tr>
-                        </table>
-                        <div zippy="wmpag"></div>    
-                    </div>
-                </div>
-            </div>      
-            {{/wmdoc}}
-
+             
       
         </div>
-            {{#isadmins}}
-           <div class="row justify-content-center mb-2">
-            
-             <div class="col-12 pl-4"  >
-               <small>  Версiя програми <b>{{curversion}}</b>. Версiя БД <b>{{curversionbd}}</b>  </small>
-            </div>
-          </div>
-           {{/isadmins}}
-
-
-
-
-
-
- 
+      </div>
+   
  
  
      <script type="text/javascript">

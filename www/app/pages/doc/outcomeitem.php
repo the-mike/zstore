@@ -29,6 +29,9 @@ class OutcomeItem extends \App\Pages\Base
     private $_doc;
     private $_rowid    = 0;
 
+    /**
+    * @param mixed $docid     редактирование
+    */
     public function __construct($docid = 0) {
         parent::__construct();
 
@@ -76,6 +79,9 @@ class OutcomeItem extends \App\Pages\Base
         if ($docid > 0) {    //загружаем   содержимое  документа на страницу
             $this->_doc = Document::load($docid)->cast();
             $this->docform->document_number->setText($this->_doc->document_number);
+            if($this->_doc->state== Document::STATE_NEW) {
+                $this->_doc->document_date = time() ;               
+            }
             $this->docform->document_date->setDate($this->_doc->document_date);
             $this->docform->store->setValue($this->_doc->headerdata['store']);
             $this->docform->tostore->setValue($this->_doc->headerdata['tostore']);
@@ -304,6 +310,7 @@ class OutcomeItem extends \App\Pages\Base
 
                         if ($indoc->branch_id == 0) {
                             $indoc->user_id = \App\System::getUser()->user_id;
+                            $indoc->save();                            
                             $indoc->updateStatus(Document::STATE_EXECUTED);
                         }
                         if ($indoc->document_id > 0) {
@@ -326,7 +333,7 @@ class OutcomeItem extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
 
             return;
         }

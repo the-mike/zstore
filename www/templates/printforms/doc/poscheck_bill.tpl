@@ -150,18 +150,27 @@
      
   
    
-    
-    
-    
+   {{#checkslogan}}   
     <tr style="font-weight: bolder;">
         <td colspan="3"><br>{{checkslogan}}</td>
 
     </tr>
-                
+   {{/checkslogan}}   
+   {{#promo}}   
+    <tr style="font-weight: bolder;">
+        <td colspan="3">{{promo}}</td>
+
+    </tr>
+   {{/promo}}   
+    
+    
+    
+{{#isdocqrcode}}                
        <tr>                    
                         <td colspan="3"> 
                             {{{docqrcode}}}
                         </td>
 
                     </tr>    
+{{/isdocqrcode}}                    
 </table>

@@ -49,6 +49,16 @@
                         <small class="form-text text-muted">Ціна для оновлення в магазині </small>
 
                     </div>
+                   <div class="form-group   ">
+                        <label for="defmf">Каса за замовчанням</label>
+
+                        <select class="form-control" zippy="defmf">
+                            <option value='0'>Не вказана</option>
+
+                        </select>
+                        <small class="form-text text-muted">Якщо оплата  не  на  стороні IM </small>
+
+                    </div>
                     <div class="form-check">
                         <input zippy="outcome" type="checkbox" class="form-check-input">
                         <label class="form-check-label" for="outcome">Тільки списання товару</label>
@@ -72,9 +82,6 @@
                         
                     <div class="form-group">
                         <input type="submit" value="Зберегти" zippy="save" class="btn   btn-primary mr-2"/>
-                            <div style="display:none" id="loader" class="spinner-border spinner-border-sm " role="status">
-                                  <span class="sr-only">Завантаження...</span>
-                              </div>
                             
 
                     </div>
@@ -85,7 +92,7 @@
 
             function check_check() {
 
-                $('#loader').removeAttr('style');
+                 document.getElementById('dialogwait').showModal()
             }
 
         </script>

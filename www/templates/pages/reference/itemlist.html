@@ -21,7 +21,7 @@
 
                     <form zippy="filter" class="row   g-2 align-items-center">
                       <div class="col-auto">
-                        <input autocomplete="off" placeholder="Пошук..." class="form-control mr-2" type="text" zippy="searchkey" onkeydown="onSearch()">
+                        <input autocomplete="off" placeholder="Пошук..." class="form-control mr-2" type="search" zippy="searchkey" onkeydown="onSearch()">
                       </div>
                        <div class="col-auto">  
                           <div class=" row no-gutters"> 
@@ -41,14 +41,14 @@
                            <div class="col-auto">
                               <input autocomplete="off"   class="form-control mr-2" zippy="searchbrand"/>
                            </div>
-                       </div>
+                         </div>
                       </div>
                        <div class="col-auto">  
                           <div class=" row no-gutters"> 
                               <label class="col-auto mt-2"  for="searchtype">Тип</label>
                           <div class="col-auto">
                             <select zippy="searchtype" class="form-control mr-sm-2">
-                                <option value="0">Всі активні</option>
+                                <option value="0">Всі </option>
                                 <option value="1">Товари</option>
                                 <option value="2">Матеріали та комплектуючі</option>
                                 <option value="3">МШП</option>
@@ -82,8 +82,14 @@
                            </div>
                     </form>
                 </div>
+                    
+                 <details class="mb-2 ml-2">
+                    <summary >Теги</summary>
+                    <small zippy="taglist"></small>
+                 </details>
+                                     
                 <a zippy="addnew" class="btn btn-primary mr-4  ">Додати</a>
-               
+                              
                 <form zippy="listform">
                     <table class="table table-hover  table-sm  ">
                         <tr>
@@ -106,7 +112,8 @@
                             {{#hp4}}<th class="text-right  ">{{hp4}}</th>{{/hp4}}
                             {{#hp5}}<th class="text-right  ">{{hp5}}</th>{{/hp5}}
 
-                            <th>Комірка</th>
+                            <th> <i title="В наявності" class="fa fa-store"></i> </th>
+                            <th> <i title="Комірка" class="fa fa-box"></i> </th>
                             <th><i title="В прайсi" class="fa fa-list-alt"></i></th>
                             {{#usesnumber}}
                             <th><i title="Облiк серiй виробника" class="fa fa-calendar-check"></i></th>
@@ -142,6 +149,7 @@
                             {{#hp4}}<td zippy="price4" class="text-right  "></td>{{/hp4}}
                             {{#hp5}}<td zippy="price5" class="text-right  "></td>{{/hp5}}
 
+                            <td ><i zippy="onstore" class="fa fa-check"></i></td>
                             <td zippy="cell"></td>
                             <td><i zippy="inprice" class="fa fa-check"></i></td>
                             {{#usesnumber}}
@@ -249,14 +257,20 @@
                                 </div>
                             </div>
 
-                            <div class="form-group row">
-                                <label class="col-5 col-form-label" for="editcell">Номер комірки на складі</label>
+
+                           <div class="form-group row">
+                                <label class="col-5 col-form-label" for="editmsr">Од. виміру</label>
                                 <div class="col-7">
-                                    <input class="form-control" zippy="editcell"/>
+                                    <input class="form-control" zippy="editmsr"/>
+                                </div>
+                            </div>       
+
+                              <div class="form-group row">
+                                <label class="col-5 col-form-label" for="edituktz">УКТЗЕД</label>
+                                <div class="col-7">
+                                    <input class="form-control" zippy="edituktz"/>
                                 </div>
                             </div>
-        
-
 
                             <div class="form-group row">
                                 <label class="col-5 col-form-label" for="editzarp">Собiвартiсть виробництва</label>
@@ -329,13 +343,14 @@
                                     <input autocomplete="on" class="form-control" zippy="editcountry"/>
                                 </div>
                             </div>
-                          <div class="form-group row">
-                                <label class="col-5 col-form-label" for="editmsr">Од. виміру</label>
+
+                      
+                             <div class="form-group row">
+                                <label class="col-5 col-form-label" for="editcell">Номер комірки на складі</label>
                                 <div class="col-7">
-                                    <input class="form-control" zippy="editmsr"/>
+                                    <input class="form-control" zippy="editcell"/>
                                 </div>
-                            </div>
-                 
+                            </div>                
                             <div class="form-group row">
                                 <label class="col-5 col-form-label" for="editweight">Вага </label>
                                 <div class="col-7">
@@ -389,7 +404,7 @@
                                         <label class="form-check-label" data-label="editdelimage" for="editdelimage">Видалити
                                             зображення</label>
                                     </div>
-                                    <small>Зображення повинно бути квадратним, інакше буде обрізано</small>
+                                    <small>Зображення повинно бути квадратним (інакше буде обрізано) та з розміром  файлу  не більше 1M </small>
 
                                 </div>
                             </div>
@@ -416,11 +431,25 @@
                                 </div>
                             </div>
                             <div class="form-group row">
+                                <label class="col-5 col-form-label" for="editnotes">Примітка</label>
+                                <div class="col-7">
+                                    <input class="form-control" zippy="editnotes"/>
+                                </div>
+                                <small>Наприклад для прайсу</small>
+                            </div>                            
+                            <div class="form-group row">
                                 <label class="col-5 col-form-label" for="editdescription">Опис</label>
                                 <div class="col-7">
                                     <textarea style="height:100px" class="form-control" zippy="editdescription"></textarea>
                                 </div>
-                            </div>       
+                            </div>    
+                           <div class="form-group row">
+                               <label class="col-5 col-form-label" for="edittags">Теги</label>
+                                <div class="col-7">
+                                 <div zippy="edittags"> </div>
+                                  <small>Вводяться по  Enter</small>
+                               </div>
+                          </div>                                
                         </div>
 
                         <div class="col-12  ">
@@ -442,7 +471,9 @@
             <div class="col-12 col-md-8 col-xl-6" zippy="setpanel">
                 <a zippy="backtolist"><i class="fa fa-arrow-alt-circle-left"></i> До довідника</a>
                 <h4 zippy="stitle"></h4>
-                <small>Комплекти (складовi частини) для готової продукцiї та напiвфабрикатiв</small>
+               
+                {{#complin}}
+                <span>Комплекти (складовi частини) для готової продукцiї та напiвфабрикатiв</span>
                 <form zippy="setform" class="form-inline mt-2 mb-2">
                     <label for="editsname">ТМЦ</label>
                     <input placeholder="Почніть вводити.." class="form-control  mr-sm-2" zippy="editsname"/>
@@ -450,7 +481,7 @@
                     <label for="editsqty">Кіл.</label>
                     <input autocomplete="off" class="form-control  qtyprice  mr-sm-2" type="text" zippy="editsqty" required="required"
                            pattern="[0-9,\.]+" style="width:60px">
-                    <input class="btn btn-outline-success  " type="submit" value="Додати">
+                    <input zippy="setformbtn" class="btn btn-outline-success  " type="submit" value="Додати">
                 </form>
                 <table class="table   table-sm  ">
                     <tr>
@@ -477,7 +508,7 @@
                     <input autocomplete="off" class="form-control  qtyprice  mr-sm-2" type="text" zippy="editscost" required="required"
                            pattern="[0-9,\.]+" style="width:60px">
                            
-                    <input class="btn btn-outline-success  " type="submit" value="Додати">
+                    <input zippy="setsformbtn" class="btn btn-outline-success  " type="submit" value="Додати">
                 </form>
                  <table class="table   table-sm  ">
                     <tr>
@@ -504,7 +535,18 @@
                 
                     <input class="btn btn-outline-success  " type="submit" value="Зберегти">
                  </form>
-                
+               {{/complin}}  
+               {{#complout}}  
+               <span>Є складовою комплектів для: </span>
+                 <table class="ctanle">
+                  {{#conploutlist}}
+                   <tr><td>{{iname}}</td><td>{{icode}}</td><td align="right">{{iqty}}</td></tr>
+                    {{/conploutlist}}
+                 </table>
+                 
+               {{/complout}}  
+               
+               
             </div>
         </div>
 

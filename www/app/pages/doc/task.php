@@ -6,7 +6,7 @@ use App\Application as App;
 use App\Entity\Doc\Document;
 use App\Entity\Employee;
 use App\Entity\Equipment;
-use App\Entity\Prodarea;
+use App\Entity\ProdArea;
 use App\Entity\Service;
 use App\Entity\Item;
 use Zippy\Html\DataList\DataView;
@@ -33,10 +33,14 @@ class Task extends \App\Pages\Base
     public $_servicelist = array();
     public $_eqlist      = array();
     public $_emplist     = array();
-    private $_basedocid   = 0;
+    private $_basedocid  = 0;
 
 
-
+    /**
+    * @param mixed $docid      редактирование
+    * @param mixed $basedocid  создание на  основании
+    * @param mixed $date       дата  с  календаря
+    */
     public function __construct($docid = 0, $basedocid = 0, $date = null) {
         parent::__construct();
 
@@ -50,13 +54,8 @@ class Task extends \App\Pages\Base
 
         $this->docform->add(new AutocompleteTextInput('customer'))->onText($this, 'OnAutoCustomer');
 
-        $this->docform->add(new DropDownChoice('parea', Prodarea::findArray("pa_name", ""), 0));
+        $this->docform->add(new DropDownChoice('parea', ProdArea::findArray("pa_name", ""), 0));
 
-        //   $this->docform->add(new SubmitLink('addservice'))->onClick($this, 'addserviceOnClick');
-        // $this->docform->add(new SubmitLink('addprod'))->onClick($this, 'addprodOnClick');
-
-        // $this->docform->add(new SubmitLink('addeq'))->onClick($this, 'addeqOnClick');
-        //  $this->docform->add(new SubmitLink('addemp'))->onClick($this, 'addempOnClick');
         $this->docform->add(new Button('backtolist'))->onClick($this, 'backtolistOnClick');
         $this->docform->add(new SubmitButton('savedoc'))->onClick($this, 'savedocOnClick');
         $this->docform->add(new SubmitButton('execdoc'))->onClick($this, 'savedocOnClick');
@@ -116,7 +115,9 @@ class Task extends \App\Pages\Base
                 $basedoc = Document::load($basedocid);
                 if ($basedoc instanceof Document) {
                     $this->_basedocid = $basedocid;
-                    $this->_doc->customer_id = $basedoc->customer_id;
+                 //   $this->_doc->customer_id = $basedoc->customer_id;
+                    $this->docform->customer->setKey($basedoc->customer_id);
+                    $this->docform->customer->setText($basedoc->customer_name);
 
                     if ($basedoc->meta_name == 'ServiceAct') {
                         $this->docform->notes->setText('Підстава '. $basedoc->document_number);
@@ -229,7 +230,10 @@ class Task extends \App\Pages\Base
         $item->quantity = $this->editdetailprod->editqtyprod->getText();
         $item->desc = $this->editdetailprod->editdescprod->getText();
 
-
+        if ( doubleval($item->quantity) == 0) {
+            $this->setError("Не вказано кількість");
+            return;
+        }
 
         $this->_prodlist[ ] = $item;
 
@@ -369,7 +373,7 @@ class Task extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }

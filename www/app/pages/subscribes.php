@@ -42,6 +42,7 @@ class Subscribes extends \App\Pages\Base
         $this->editform->add(new CheckBox('edithtml'));
         $this->editform->add(new TextArea('editmsgtext'));
         $this->editform->add(new TextInput('editmsgsubject'));
+        $this->editform->add(new TextInput('editurl'));
 
         $this->editform->add(new DropDownChoice('editeventtype', Subscribe::getEventList(), Subscribe::EVENT_DOCSTATE))->onChange($this, 'update');
         $this->editform->add(new DropDownChoice('editdoctype', H::getDocTypes(), 0));
@@ -55,19 +56,64 @@ class Subscribes extends \App\Pages\Base
         $this->editform->add(new ClickLink('delete'))->onClick($this, 'OnDelete');
 
         $this->Reload();
+
     }
 
     public function update($sender) {
-        $et = $this->editform->editeventtype->getValue();
 
-        $this->editform->editdoctype->setVisible($et == Subscribe::EVENT_DOCSTATE);
-        $this->editform->editstate->setVisible($et == Subscribe::EVENT_DOCSTATE);
+
+   
+
+        $et = $this->editform->editeventtype->getValue();
+        if($sender->id=='editeventtype') {
+            $l=Subscribe::getRecieverList($et) ;
+            $this->editform->editrecievertype->setOptionList($l);
+            $this->editform->editrecievertype->setValue(array_shift($l));            
+
+            if($et == Subscribe::EVENT_DOCSTATE) {
+                $this->editform->editdoctype->setVisible(true);
+                $this->editform->editstate->setVisible(true);
+            }
+            if($et == Subscribe::EVENT_NEWCUST) {
+                $this->editform->editdoctype->setVisible(false);
+                $this->editform->editstate->setVisible(false);
+            }
+            $this->update($this->editform->editrecievertype) ;    
+            return;       
+        }
         $rt = $this->editform->editrecievertype->getValue();
-        $this->editform->edituser->setVisible($rt == Subscribe::RSV_USER);
+
+        if($sender->id=='editrecievertype') {
+            $l=Subscribe::getMsgTypeList($rt) ;
+            $this->editform->editmsgtype->setOptionList($l);
+            $this->editform->editmsgtype->setValue(array_shift($l));            
+            $this->update($this->editform->editmsgtype) ;    
+            
+            $this->editform->edituser->setVisible($rt==Subscribe::RSV_USER);
+
+            
+            
+            return;       
+          
+        }        
         $mt = $this->editform->editmsgtype->getValue();
-        $this->editform->editmsgsubject->setVisible($mt == Subscribe::MSG_EMAIL);
-        $this->editform->editattach->setVisible( $mt == Subscribe::MSG_BOT);
-        $this->editform->edithtml->setVisible($mt == Subscribe::MSG_EMAIL || $mt == Subscribe::MSG_BOT);
+        
+        if($sender->id=='editmsgtype') {
+            $this->editform->editmsgsubject->setVisible(false);
+            $this->editform->editattach->setVisible( false);
+            $this->editform->edithtml->setVisible(false);
+            
+            $this->editform->editurl->setVisible($mt == Subscribe::RSV_WH);
+            
+            if($mt == Subscribe::MSG_EMAIL) {
+                $this->editform->editmsgsubject->setVisible(true);
+            }            
+            return;       
+          
+        }        
+
+        
+        
     }
 
     public function sublistOnRow($row) {
@@ -101,6 +147,8 @@ class Subscribes extends \App\Pages\Base
         $this->editform->editeventtype->setValue(Subscribe::EVENT_DOCSTATE);
         $this->editform->editrecievertype->setValue(Subscribe::EVENT_DOCSTATE);
         $this->update($this->editform->editeventtype);
+        
+        $this->update( $this->editform->editeventtype) ;        
     }
 
     public function OnEdit($sender) {
@@ -116,6 +164,7 @@ class Subscribes extends \App\Pages\Base
 
         $this->editform->editmsgtext->setText($this->_sub->msgtext);
         $this->editform->editmsgsubject->setText($this->_sub->msgsubject);
+        $this->editform->editurl->setText($this->_sub->url);
         $this->editform->editdisabled->setCheCked($this->_sub->disabled);
         $this->editform->editattach->setCheCked($this->_sub->attach);
         $this->editform->edithtml->setCheCked($this->_sub->html);
@@ -123,6 +172,8 @@ class Subscribes extends \App\Pages\Base
         $this->update($this->editform->editeventtype);
         $this->plist->setVisible(false);
         $this->editform->setVisible(true);
+        
+        $this->update( $this->editform->editeventtype) ;
     }
 
     public function OnSave($sender) {
@@ -143,22 +194,35 @@ class Subscribes extends \App\Pages\Base
 
         $this->_sub->msgtext = trim($this->editform->editmsgtext->getText());
         $this->_sub->msgsubject = trim($this->editform->editmsgsubject->getText());
+        $this->_sub->url = trim($this->editform->editurl->getText());
         $this->_sub->disabled = $this->editform->editdisabled->isCheCked() ? 1 : 0;
         $this->_sub->html = $this->editform->edithtml->isCheCked() ? 1 : 0;
 
-        if ($this->_sub->msg_type == 0) {
-            $this->setError("Не вказано тип повідомлення");
-            return;
-        }
         if ($this->_sub->reciever_type == Subscribe::RSV_USER && $this->_sub->user_id == 0) {
             $this->setError("Не вказано користувача");
             return;
         }
 
-        if (strlen($this->_sub->msgtext) == 0) {
-            $this->setError("Не вказано текст повідомлення");
+        if ($this->_sub->reciever_type != Subscribe::RSV_WH ) {
+            if (strlen($this->_sub->msgtext) == 0) {
+                $this->setError("Не вказано текст повідомлення");
+                return;
+            }
+            if ($this->_sub->msg_type == 0) {
+                $this->setError("Не вказано тип повідомлення");
+                return;
+            }
+        }  else {
+            $this->_sub->msg_type =0;           
+            $this->_sub->msg_typename ='';           
+        }
+        
+        if ($this->_sub->reciever_type == Subscribe::RSV_WH && strlen($this->_sub->url) == 0) {
+            $this->setError("Не вказано URL");
             return;
         }
+        
+        
         $this->_sub->save();
         $this->Reload();
         $this->plist->setVisible(true);

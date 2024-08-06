@@ -180,6 +180,7 @@ class TTN extends Document
                 if ($item->autooutcome == 1) { //комплекты
                     $set = \App\Entity\ItemSet::find("pitem_id=" . $item->item_id);
                     foreach ($set as $part) {
+                        $lost = 0;
 
                         $itemp = \App\Entity\Item::load($part->item_id);
                         if($itemp == null) {
@@ -191,6 +192,12 @@ class TTN extends Document
                             throw new \Exception("На складі всього ".$itemp->getQuantity($this->headerdata['store']) ." ТМЦ {$itemp->itemname}. Списання у мінус заборонено");
 
                         }
+                         //учитываем  отходы
+                        if ($itemp->lost > 0) {
+                            $k = 1 / (1 - $itemp->lost / 100);
+                            $itemp->quantity = $itemp->quantity * $k;
+                            $lost = $k - 1;
+                        }
 
                         $listst = \App\Entity\Stock::pickup($this->headerdata['store'], $itemp);
 
@@ -200,6 +207,17 @@ class TTN extends Document
                             $sc->tag=Entry::TAG_TOPROD;
 
                             $sc->save();
+                            
+                            if ($lost > 0) {
+                                $io = new \App\Entity\IOState();
+                                $io->document_id = $this->document_id;
+                                $io->amount = 0 - $st->quantity * $st->partion * $lost;
+                                $io->iotype = \App\Entity\IOState::TYPE_TRASH;
+
+                                $io->save();
+
+                            }    
+                            
                         }
                     }
                 }
@@ -235,19 +253,24 @@ class TTN extends Document
                 $sc->save();
             }
         }
+        $this->DoBalans() ;
 
         return true;
     }
 
     public function onState($state, $oldstate) {
 
-        if ($state == Document::STATE_INSHIPMENT) {
+        if ($state == Document::STATE_DELIVERED) {
+                                          
             //расходы на  доставку
-            if ($this->headerdata['ship_amount'] > 0) {
+            if ($this->headerdata['ship_amount'] > 0 && $this->headerdata['payseller'] == 1) {
                 $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, 0 - $this->headerdata['ship_amount'], H::getDefMF());
-                if ($payed > 0) {
-                    $this->payed = $payed;
-                }
+               // $this->payed = $payed;
+               // $this->DoBalans() ;
+            }
+            
+            if ($this->headerdata['ship_amount'] > 0  ) {
+               
                 \App\Entity\IOState::addIOState($this->document_id, 0 - $this->headerdata['ship_amount'], \App\Entity\IOState::TYPE_SALE_OUTCOME);
 
             }
@@ -289,6 +312,22 @@ class TTN extends Document
         return array(self::EX_EXCEL, self::EX_PDF);
     }
 
-
+    /**
+    * @override
+    */
+    public function DoBalans() {
+          $conn = \ZDB\DB::getConnect();
+        $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
+           //тмц
+            if($this->payamount >0) {
+                $b = new \App\Entity\CustAcc();
+                $b->customer_id = $this->customer_id;
+                $b->document_id = $this->document_id;
+                $b->amount = 0-$this->payamount;
+                $b->optype = \App\Entity\CustAcc::BUYER;
+                $b->save();
+            }
+             
+    }
 
 }

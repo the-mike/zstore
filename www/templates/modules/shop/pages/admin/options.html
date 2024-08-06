@@ -35,6 +35,18 @@
                             </select>
                           </div> 
                     </div>
+                    
+                  <div class="form-group  row ">
+                        <label class="col-6 col-form-label"  for="defmf">Каса за замовчанням</label>
+                        <div class="col-6">
+                            <select class="form-control" zippy="defmf">
+                                <option value='0'>Не вказана</option>
+                            </select>
+                            <small class="form-text text-muted">Якщо оплата  не  на  стороні IM </small>
+                        </div> 
+                    </div>
+                    
+                    
                  <div class="form-group  row">
                         <label  class="col-6 col-form-label"  for="salesource">Джерело продаж</label>
                          <div class="col-6">
@@ -72,9 +84,11 @@
                       
                     </div>         {{#usebranch}}
                     <div class="form-group  row ">
-                        <label  class="col-6 col-form-label"   for="shopdefbranch">Фiлiя </label>
+                     <div class="col-6">
+                        <label      for="shopdefbranch">Фiлiя </label>
                               <i class="fa fa-info-circle  " data-toggle="tooltip" data-placement="top"
                                    title=" Фiлiя, з  якою створюються  документи "></i>
+                        </div>              
                            <div class="col-6">
                             <select class="form-control" zippy="shopdefbranch">
                                 <option value="0">Не обрано</option>
@@ -83,7 +97,19 @@
                       
                     </div>
                     {{/usebranch}}
-              
+                       <div class="form-group  row ">
+                     <div class="col-6">
+                        <label      for="shopdefuser">Користувач </label>
+                              <i class="fa fa-info-circle  " data-toggle="tooltip" data-placement="top"
+                                   title=" Користувач, на якого  створюются замовлдення.Повинен  мати  права  на  обробку  замовлення. "></i>
+                        </div>              
+                           <div class="col-6">
+                            <select class="form-control" zippy="shopdefuser">
+                                
+                            </select>
+                            </div>  
+                      
+                    </div>         
 
                     <div class="form-group  row ">
                         <label class="col-6 col-form-label"   for="email">E-mail для   зв'язку</label>
@@ -133,6 +159,7 @@
                         <label class="form-check-label" for="noshowempty">Не показувати  якщо нема на  складi </label>
 
                     </div>
+              
          
                     <div class="form-check">
                         <input zippy="uselogin" type="checkbox" class="form-check-input">

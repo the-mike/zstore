@@ -22,17 +22,23 @@ use App\Modules\Shop\Entity\Product;
 class Order extends Base
 {
     public $sum = 0;
+    public $disc = 0;
     public $orderid = 0;
     public $basketlist;
 
     public function __construct() {
         parent::__construct();
+        
+        $this->sum=0;
+        $this->disc=0;
+        
         $this->basketlist = Basket::getBasket()->list;
         $form = $this->add(new Form('listform'));
         $form->onSubmit($this, 'OnUpdate');
 
         $form->add(new \Zippy\Html\DataList\DataView('pitem', new \Zippy\Html\DataList\ArrayDataSource(new \Zippy\Binding\PropertyBinding($this, 'basketlist')), $this, 'OnAddRow'))->Reload();
         $form->add(new Label('summa', new \Zippy\Binding\PropertyBinding($this, 'sum')));
+        $form->add(new Label('disc', new \Zippy\Binding\PropertyBinding($this, 'disc')));
         $this->OnUpdate($this);
 
 
@@ -49,10 +55,10 @@ class Order extends Base
         $form->add(new \Zippy\Html\Form\Time('deltime', time() + 3600))->setVisible($this->_tvars["isfood"]);
 
 
-        $form->add(new TextInput('email'));
-        $form->add(new TextInput('phone'));
-        $form->add(new TextInput('firstname'));
-        $form->add(new TextInput('lastname'));
+        $form->add(new TextInput('email',$_COOKIE['shop_email']));
+        $form->add(new TextInput('phone',$_COOKIE['shop_phone']));
+        $form->add(new TextInput('firstname',$_COOKIE['shop_fn']));
+        $form->add(new TextInput('lastname',$_COOKIE['shop_ln']));
         $form->add(new TextArea('address'))->setVisible(false);
         $form->add(new TextArea('notes'));
         $form->onSubmit($this, 'OnSave');
@@ -63,11 +69,18 @@ class Order extends Base
             $form->phone->setText($c->phone) ;
             $form->email->setText($c->email)  ;
             $form->address->setText($c->address)  ;
-            $form->firstname->setText($c->firstname)  ;
+            $form->firstname->setText( strlen( $c->firstname ??'') >0 ? $c->firstname : $c->customer_name )  ;
             $form->lastname->setText($c->lastname)  ;
         }
 
-
+        $api = new \App\Modules\NP\Helper();
+      
+     
+        $areas = $api->getAreaListCache();
+        $form->add(new DropDownChoice('bayarea',$areas,0))->onChange($this, 'onBayArea');
+        $form->add(new DropDownChoice('baycity'))->onChange($this, 'onBayCity');
+        $form->add(new DropDownChoice('baypoint'));
+   
         $this->OnDelivery($form->delivery);
 
 
@@ -75,11 +88,18 @@ class Order extends Base
 
     public function OnDelivery($sender) {
 
-        if ($sender->getValue() == 2 || $sender->getValue() == 3) {
-            $this->orderform->address->setVisible(true);
-        } else {
+        $dt = $sender->getValue();
+        
+        if ($dt == Document::DEL_SELF || $dt == Document::DEL_NP) {
             $this->orderform->address->setVisible(false);
+        } else {
+            $this->orderform->address->setVisible(true);
         }
+        
+        $this->orderform->bayarea->setVisible($dt  == Document::DEL_NP ) ;
+        $this->orderform->baycity->setVisible($dt  == Document::DEL_NP ) ;
+        $this->orderform->baypoint->setVisible($dt == Document::DEL_NP ) ;
+        
     }
 
     public function OnUpdate($sender) {
@@ -101,7 +121,19 @@ class Order extends Base
 
 
         }
+        $this->disc =0;
+        $cid = System::getCustomer() ;
+        if($cid > 0) {
+            $c =  Customer::load($cid);
+            $d= $c->getDiscount();
 
+            if (doubleval($d) > 0) {
+                $this->disc = \App\Helper::fa(  $this->sum * ($d/100) );
+                $this->sum  =  $this->sum -  $this->disc;         
+            }              
+        }
+   
+        $this->listform->disc->setVisible($this->disc >0);
 
         $basket = Basket::getBasket();
         $basket->list = $this->basketlist   ;
@@ -120,6 +152,8 @@ class Order extends Base
         foreach ($this->basketlist as $p) {
             $this->sum = $this->sum + ($p->price  * $p->quantity);
         }
+        
+		$this->listform->pitem->Reload();
 
         if (count($this->basketlist)==0) {
             App::Redirect("\\App\\Modules\\Shop\\Pages\\Catalog\\Main", 0);
@@ -172,13 +206,15 @@ class Order extends Base
             $this->setError("Невірний час доставки");
             return;
         }
+        $conn = \ZDB\DB::getConnect();
+        $conn->BeginTrans();
 
         $order = null;
         try {
 
 
             $store_id = (int)$shop["defstore"];
-            $f = 0;
+            $f = $shop["defbranch"] ??0;
 
             $store = \App\Entity\Store::load($store_id);
             if ($store != null) {
@@ -197,7 +233,7 @@ class Order extends Base
 
             }
 
-            $order->document_number = $order->nextNumber();
+            $order->document_number = $order->nextNumber($shop["defbranch"] ?? 0);
 
             $amount = 0;
             $itlist = array();
@@ -219,8 +255,11 @@ class Order extends Base
                 'ship_address'  => $address,
                 'ship_name'     => trim($firstname.' '.$lastname),
                 'shoporder'     => 1,
+                'totaldisc'     => $this->disc,
                 'total'         => $amount
             );
+             
+            
             $order->packDetails('detaildata', $itlist);
 
             $cid = System::getCustomer() ;
@@ -252,18 +291,37 @@ class Order extends Base
             $order->headerdata['contact'] = trim($firstname.' '.$lastname) . ', ' . $phone;
             $order->headerdata['salesource'] = $shop['salesource'];
             $order->headerdata['shoporder'] = 1;
+            if($modules['defmf']>0) {
+              $neworder->headerdata['payment'] = $modules['defmf'];
+            }
 
             $order->notes = trim($this->orderform->notes->getText());
             $order->amount = $amount;
-            $order->payamount = $amount;
-            $order->branch_id = $shop["defbranch"];
+            $order->payamount = $amount - $this->disc;
+         //   $order->branch_id = $shop["defbranch"] ?? 0;
             $order->firm_id = $shop["firm"];
-
+            $order->user_id = intval($shop["defuser"]??0) ;
             if($order->user_id==0) {
-                $user = \App\Entity\user::getByLogin('admin') ;
+                $user = \App\Entity\User::getByLogin('admin') ;
                 $order->user_id = $user->user_id;
             }
 
+            $order->headerdata['bayarea'] = $this->orderform->bayarea->getValue();
+            $order->headerdata['baycity'] = $this->orderform->baycity->getValue();
+            $order->headerdata['baypoint'] = $this->orderform->baypoint->getValue();
+            $order->headerdata['npaddress'] ='';
+            if(strlen($order->headerdata['bayarea'])>1) {
+               $order->headerdata['npaddress']  .= (' '. $this->orderform->bayarea->getValueName() );   
+            }
+            if(strlen($order->headerdata['baycity'])>1) {
+               $order->headerdata['npaddress']  .= (' '. $this->orderform->baycity->getValueName() );   
+            }
+            if(strlen($order->headerdata['baypoint'])>1) {
+               $order->headerdata['npaddress']  .= (' '. $this->orderform->baypoint->getValueName() );   
+            }
+              
+            
+            
             $order->save();
 
             \App\Helper::insertstat(\App\Helper::STAT_ORDER_SHOP, 0, 0) ;
@@ -301,10 +359,13 @@ class Order extends Base
             //   $this->setSuccess("Створено замовлення " . $order->document_number);
 
 
-            \App\Entity\Subscribe::sendSMS($phone, "Ваше замовлення номер " . $order->document_id);
+         //   \App\Entity\Subscribe::sendSMS($phone, "Ваше замовлення номер " . $order->document_id);
+            $conn->CommitTrans();
 
         } catch(\Exception $ee) {
             $this->setError($ee->getMessage());
+            $conn->RollbackTrans();
+             
             return;
         }
 
@@ -317,11 +378,19 @@ class Order extends Base
 
         System::setSuccessMsg("Створено замовлення номер " . $number) ;
 
+        
+        setcookie("shop_fn",$firstname) ;
+        setcookie("shop_ln",$lastname) ;
+        setcookie("shop_phone",$phone) ;
+        setcookie("shop_email",$email) ;
+        
+        
         if($payment == 1) {
 
             App::Redirect("App\\Modules\\Shop\\Pages\\Catalog\\OrderPay", array($order->document_id)) ;
-
+            return;
         }
+        App::Redirect("App\\Modules\\Shop\\Pages\\Catalog\\Main") ;
 
 
     }
@@ -337,5 +406,20 @@ class Order extends Base
     }
 
 
+    public function onBayArea($sender) {
+
+        $api = new \App\Modules\NP\Helper();
+        $list = $api->getCityListCache($sender->getValue());
+
+        $this->orderform->baycity->setOptionList($list);
+    }
+
+    public function onBayCity($sender) {
+
+        $api = new \App\Modules\NP\Helper();
+        $list = $api->getPointListCache($sender->getValue());
+
+        $this->orderform->baypoint->setOptionList($list);
+    }
 
 }

@@ -36,6 +36,10 @@ class POSCheck extends \App\Pages\Base
     private $_order_id  = 0;
     private $_prevcust  = 0;   // предыдущий контрагент
 
+    /**
+    * @param mixed $docid     редактирование
+    * @param mixed $basedocid  создание на  основании
+    */
     public function __construct($docid = 0, $basedocid = 0) {
         parent::__construct();
 
@@ -126,7 +130,7 @@ class POSCheck extends \App\Pages\Base
             $this->_doc = Document::load($docid)->cast();
             if($this->_doc->headerdata['arm']==1) {
                 $this->setWarn('Чек створено в АРМ касира')  ;
-                App::Redirect("\\App\\Pages\\Service\\ARMPos");
+                App::Redirect("\\App\\Pages\\Service\\ARMPos",$this->_doc);
 
                 return;
             }
@@ -617,7 +621,7 @@ class POSCheck extends \App\Pages\Base
             }
             $this->setError($ee->getMessage());
 
-            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_desc);
+            $logger->error($ee->getMessage() . " Документ " . $this->_doc->meta_name);
             return;
         }
     }

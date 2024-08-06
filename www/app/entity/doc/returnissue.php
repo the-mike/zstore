@@ -76,19 +76,74 @@ class ReturnIssue extends Document
             $sc->save();
         }
 
-        $payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, 0 - $this->payed, $this->headerdata['payment']);
-        if ($payed > 0) {
-            $this->payed = $payed;
+        $this->payed = \App\Entity\Pay::addPayment($this->document_id, $this->document_date, 0 - $this->headerdata['payed'], $this->headerdata['payment']);
+    
+        \App\Entity\IOState::addIOState($this->document_id, 0 - $this->headerdata['payed'], \App\Entity\IOState::TYPE_BASE_INCOME);
+        $this->DoBalans() ;
+
+        if($this->headerdata["bonus"] > 0) {
+                $ca = new \App\Entity\CustAcc();
+
+                $ca->document_id = $this->document_id;
+                $ca->amount = $this->headerdata["bonus"];
+                $ca->optype = \App\Entity\CustAcc::BONUS;
+               
+                $ca->customer_id = $this->customer_id;
+
+                $ca->save();       
         }
-        \App\Entity\IOState::addIOState($this->document_id, 0 - $this->payed, \App\Entity\IOState::TYPE_BASE_INCOME);
 
+        //штраф  сотруднику
+       if ($this->parent_id > 0) {
+            $parent = Document::load($this->parent_id);
+            $user = \App\Entity\User::load($parent->user_id);        
+            $disc = \App\System::getOptions("discount");
+            $emp_id = \App\System::getUser()->employee_id ;
+            if($emp_id >0 && $disc["fineret"] >0  && $parent->meta_name=='POSCheck') {
+                $b =  $this->amount * $disc["fineret"] / 100;
+                $ua = new \App\Entity\EmpAcc();
+                $ua->optype = \App\Entity\EmpAcc::FINE;
+                $ua->document_id = $this->document_id;
+                $ua->emp_id = $emp_id;
+                $ua->amount = 0-$b;
+                $ua->save();
 
-
+            }
+            
+        }     
+        
         return true;
     }
 
     protected function getNumberTemplate() {
         return 'BK-000000';
     }
+    /**
+    * @overrride
+    */
+    public function DoBalans() {
+          $conn = \ZDB\DB::getConnect();
+          $conn->Execute("delete from custacc where optype in (2,3) and document_id =" . $this->document_id);
 
+              
+        //платежи       
+        foreach($conn->Execute("select abs(amount) as amount ,paydate from paylist  where  paytype < 1000 and  coalesce(amount,0) <> 0 and document_id = {$this->document_id}  ") as $p){
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = 0-$p['amount'];
+            $b->createdon = strtotime($p['paydate']);
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+        
+        if($this->payamount >0) {
+            $b = new \App\Entity\CustAcc();
+            $b->customer_id = $this->customer_id;
+            $b->document_id = $this->document_id;
+            $b->amount = $this->payamount;
+            $b->optype = \App\Entity\CustAcc::BUYER;
+            $b->save();
+        }
+    }
 }
